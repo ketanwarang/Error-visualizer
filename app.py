@@ -178,19 +178,13 @@ def error_type(wg: int, wc: int) -> str:
 
 def raw_to_b64(raw: bytes):
     img = Image.open(BytesIO(raw)).convert("RGB")
+    ratio = 1.0
     if img.width > MAX_RENDER_W:
         ratio = MAX_RENDER_W / img.width
         img = img.resize((MAX_RENDER_W, int(img.height * ratio)), Image.LANCZOS)
     buf = BytesIO()
     img.save(buf, format="JPEG", quality=90)
-    return base64.b64encode(buf.getvalue()).decode(), img.width, img.height
-
-def get_coord_scale(img_w, img_h, rows):
-    raw_xmax = rows["x_max"].max()
-    raw_ymax = rows["y_max"].max()
-    sx = img_w / raw_xmax if raw_xmax > img_w else 1.0
-    sy = img_h / raw_ymax if raw_ymax > img_h else 1.0
-    return min(sx, sy, 1.0)
+    return base64.b64encode(buf.getvalue()).decode(), img.width, img.height, ratio
 
 def build_annotations_json(rows: pd.DataFrame, scale: float, class_img_map: dict = {}) -> str:
     """Store coords in original image space (ix0/iy0/ix1/iy1).
@@ -575,7 +569,6 @@ errors = df[
 ].copy()
 
 n_both  = int(((errors.wrong_group==1) & (errors.wrong_class==1)).sum())
-n_group = int(((errors.wrong_group==1) & (errors.wrong_class==0)).sum())
 n_class = int(((errors.wrong_group==0) & (errors.wrong_class==1)).sum())
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -585,8 +578,8 @@ with st.expander("🔽  Filters & display options", expanded=True):
     fc1, fc2, fc3, fc4, fc5, fc6 = st.columns([2, 2, 1.8, 1.8, 1.8, 1.5])
     with fc1:
         error_filter = st.selectbox(
-            f"Error type  (🔴{n_both:,} / 🟢{n_group:,} / 🟡{n_class:,})",
-            ["Any error", "Wrong group + class", "Wrong group only", "Wrong class only"]
+            f"Error type  (🔴{n_both:,} / 🟡{n_class:,})",
+            ["Any error", "Wrong group", "Wrong class only"]
         )
     with fc2:
         sku_search = st.text_input("SKU name", placeholder="Search actual or predicted…")
@@ -609,10 +602,8 @@ with st.expander("🔽  Filters & display options", expanded=True):
 # APPLY FILTERS
 # ══════════════════════════════════════════════════════════════════════════════
 filt = errors.copy()
-if error_filter == "Wrong group + class":
+if error_filter == "Wrong group":
     filt = filt[(filt.wrong_group==1) & (filt.wrong_class==1)]
-elif error_filter == "Wrong group only":
-    filt = filt[(filt.wrong_group==1) & (filt.wrong_class==0)]
 elif error_filter == "Wrong class only":
     filt = filt[(filt.wrong_group==0) & (filt.wrong_class==1)]
 
@@ -669,8 +660,7 @@ if not group_keys:
       <div style="font-size:15px;font-weight:600;color:#333;margin-bottom:6px">No images match the current filters</div>
       <div style="font-size:13px;color:#666;line-height:1.9">
         Breakdown in this dataset:<br>
-        🔴 Wrong group + class: <b>{n_both:,}</b> &nbsp;·&nbsp;
-        🟢 Wrong group only: <b>{n_group:,}</b> &nbsp;·&nbsp;
+        🔴 Wrong group: <b>{n_both:,}</b> &nbsp;·&nbsp;
         🟡 Wrong class only: <b>{n_class:,}</b><br>
         Adjust the error type, SKU name, date, shop, or image ID filters above.
       </div>
@@ -750,9 +740,8 @@ if raw is None:
     st.error(f"Could not fetch image — URL may need authentication or VPN access.\n`{img_url[:120]}`")
     st.stop()
 
-img_b64, iw, ih = raw_to_b64(raw)
-scale     = get_coord_scale(iw, ih, rows)
-anns_json = build_annotations_json(rows, scale, class_img_map)
+img_b64, iw, ih, img_ratio = raw_to_b64(raw)
+anns_json = build_annotations_json(rows, img_ratio, class_img_map)
 render_canvas(img_b64, iw, ih, anns_json, has_class_info)
 
 # ══════════════════════════════════════════════════════════════════════════════
