@@ -8,9 +8,9 @@ import SettingsPanel from "@/components/SettingsPanel";
 import HeaderDownloadButton from "@/components/HeaderDownloadButton";
 
 export const metadata: Metadata = {
-  title: "ShelfWatch · Error Annotation Portal",
+  title: "AI Analysis Portal",
   description:
-    "Visually inspect ShelfWatch recognition errors overlaid on shelf images.",
+    "Visually inspect AI recognition errors and annotations overlaid on images.",
   icons: {
     icon: "/favicon.svg",
   },
@@ -40,17 +40,17 @@ export default function RootLayout({
           <ExportProvider>
             <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
               <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
-                <Link href="/" className="group flex items-center gap-3">
-                  <Logo />
+                <a href="/" className="group flex items-center gap-3">
+                  <Logo size={32} />
                   <span>
                     <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
-                      ParallelDots · ShelfWatch
+                      Computer Vision Inspection
                     </span>
-                    <span className="block text-[15px] font-bold leading-tight text-ink">
-                      Error Annotation Portal
+                    <span className="block text-[16px] font-bold leading-tight text-ink">
+                      AI Analysis Portal
                     </span>
                   </span>
-                </Link>
+                </a>
                 <div className="flex items-center gap-2">
                   <HeaderDownloadButton />
                   <SettingsPanel />

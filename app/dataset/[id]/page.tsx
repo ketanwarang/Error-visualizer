@@ -361,9 +361,9 @@ export default function DatasetPage() {
       {/* ── Breadcrumb + shortcuts + collapse toggle ── */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[13px]">
-          <Link href="/" className="text-mute transition-colors hover:text-brand">
+          <a href="/" className="text-mute transition-colors hover:text-brand">
             Datasets
-          </Link>
+          </a>
           <span className="text-line">/</span>
           <span className="font-semibold text-ink">{dataset.name}</span>
         </div>
@@ -486,7 +486,7 @@ export default function DatasetPage() {
                   rel="noreferrer"
                   className="text-[12px] font-semibold text-[var(--color-brand)] transition-opacity hover:opacity-70"
                 >
-                  Open in ShelfWatch viewer ↗
+                  Open in External Viewer ↗
                 </a>
               )}
             </motion.div>
