@@ -21,8 +21,8 @@ import {
   proxied,
 } from "@/lib/types";
 import { getSession, saveSession } from "@/lib/sessions";
-import { exportRows } from "@/lib/export";
 import { useSettings } from "@/components/SettingsContext";
+import { useExport } from "@/components/ExportContext";
 import CanvasViewer, { CanvasViewerHandle } from "@/components/CanvasViewer";
 import InfoPanel from "@/components/InfoPanel";
 import Filmstrip from "@/components/Filmstrip";
@@ -32,7 +32,14 @@ const PAGE_SIZE = 1000;
 export default function DatasetPage() {
   const { id } = useParams<{ id: string }>();
   const { settings } = useSettings();
-  const viewH = Math.round((typeof window !== "undefined" ? window.innerHeight : 780) * 0.55 * settings.viewerScale);
+  const { setExportData, clearExportData } = useExport();
+
+  const viewH = Math.round(
+    (typeof window !== "undefined" ? window.innerHeight : 780) *
+      0.55 *
+      settings.viewerScale
+  );
+  const viewWPct = Math.round((settings.viewerWidthScale ?? 1.0) * 100);
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [anns, setAnns] = useState<AnnRow[] | null>(null);
@@ -47,6 +54,7 @@ export default function DatasetPage() {
   const [imgIdSearch, setImgIdSearch] = useState("");
   const [annIdSearch, setAnnIdSearch] = useState("");
   const [showTable, setShowTable] = useState(false);
+  const [topCollapsed, setTopCollapsed] = useState(false);
 
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<AnnRow | null>(null);
@@ -116,7 +124,6 @@ export default function DatasetPage() {
     let f = anns;
     if (errFilter !== "any") {
       if (errFilter === "both") {
-        // "Wrong group" — includes both WG+WC and WG-only
         f = f.filter((a) => a.wrong_group === 1);
       } else {
         f = f.filter((a) => errorType(a.wrong_group, a.wrong_class) === errFilter);
@@ -136,6 +143,12 @@ export default function DatasetPage() {
       f = f.filter((a) => (a.annotation_id ?? "").includes(annIdSearch.trim()));
     return f;
   }, [anns, errFilter, skuSearch, dateFilter, shopFilter, imgIdSearch, annIdSearch]);
+
+  /* Feed export data to header download button */
+  useEffect(() => {
+    if (dataset) setExportData(filtered, dataset.name);
+    return () => clearExportData();
+  }, [filtered, dataset, setExportData, clearExportData]);
 
   const imageGroups = useMemo(() => {
     const m = new Map<string, AnnRow[]>();
@@ -271,13 +284,14 @@ export default function DatasetPage() {
       )
         return;
       const k = e.key.toLowerCase();
+      const activeAnn = selected ?? rows[0];
       if (k === "s" || k === "arrowleft") {
         e.preventDefault(); goPrev(); setFlash("s");
       } else if (k === "f" || k === "arrowright") {
         e.preventDefault(); goNext(); setFlash("f");
       } else if (k === "d") {
         e.preventDefault(); viewerRef.current?.resetZoom(); setFlash("d");
-      } else if (["1", "2", "3", "4", "5"].includes(k) && selected) {
+      } else if (["1", "2", "3", "4", "5"].includes(k) && activeAnn) {
         e.preventDefault();
         const statuses: TriageStatus[] = [
           "incorrectly_tagged",
@@ -287,15 +301,15 @@ export default function DatasetPage() {
           "ambiguous",
         ];
         const status = statuses[Number(k) - 1];
-        updateTriage(selected, {
-          triage_status: selected.triage_status === status ? null : status,
+        updateTriage(activeAnn, {
+          triage_status: activeAnn.triage_status === status ? null : status,
         });
         setFlash(k);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goPrev, goNext, selected, updateTriage]);
+  }, [goPrev, goNext, selected, rows, updateTriage]);
 
   useEffect(() => {
     if (!flash) return;
@@ -307,6 +321,8 @@ export default function DatasetPage() {
     setIdx(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [errFilter, skuSearch, dateFilter, shopFilter, imgIdSearch, annIdSearch]);
+
+  const activeAnn = selected ?? rows[0];
 
   /* ── Render states ── */
   if (loadError)
@@ -342,7 +358,7 @@ export default function DatasetPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Breadcrumb + shortcuts ── */}
+      {/* ── Breadcrumb + shortcuts + collapse toggle ── */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[13px]">
           <Link href="/" className="text-mute transition-colors hover:text-brand">
@@ -351,79 +367,89 @@ export default function DatasetPage() {
           <span className="text-line">/</span>
           <span className="font-semibold text-ink">{dataset.name}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-mute">
-          <Cap k="s" flash={flash} /> prev
-          <Cap k="d" flash={flash} /> 100%
-          <Cap k="f" flash={flash} /> next
-          <span className="mx-1 text-line">|</span>
-          <Cap k="1" flash={flash} /><Cap k="2" flash={flash} /><Cap k="3" flash={flash} /><Cap k="4" flash={flash} /><Cap k="5" flash={flash} /> remarks
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setTopCollapsed((c) => !c)}
+            className="rounded-lg border border-line bg-paper px-3 py-1 text-[11px] font-semibold text-ink shadow-card transition-colors hover:border-[var(--color-brand)]"
+          >
+            {topCollapsed ? "Show Filters & Metrics ↓" : "Hide Filters & Metrics ↑"}
+          </button>
+          <div className="hidden sm:flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-mute">
+            <Cap k="s" flash={flash} /> prev
+            <Cap k="d" flash={flash} /> 100%
+            <Cap k="f" flash={flash} /> next
+            <span className="mx-1 text-line">|</span>
+            <Cap k="1" flash={flash} /><Cap k="2" flash={flash} /><Cap k="3" flash={flash} /><Cap k="4" flash={flash} /><Cap k="5" flash={flash} /> remarks
+          </div>
         </div>
       </div>
 
-      {/* ── Metrics ── */}
-      <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-5">
-        <Metric label="Total annotations" value={dataset.total_rows} delay={0} />
-        <Metric label="Total errors" value={dataset.error_rows} accent delay={0.05} />
-        <Metric label="Filtered errors" value={filtered.length} accent delay={0.1} />
-        <Metric label="Matched images" value={total} delay={0.15} />
-        <Metric
-          label="Triaged"
-          value={triagedCount}
-          suffix={filtered.length ? ` / ${filtered.length.toLocaleString()}` : ""}
-          delay={0.2}
-        />
-      </div>
+      {/* ── Collapsible Top Section (Metrics + Filters) ── */}
+      <AnimatePresence initial={false}>
+        {!topCollapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            {/* ── Metrics ── */}
+            <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-5">
+              <Metric label="Total annotations" value={dataset.total_rows} delay={0} />
+              <Metric label="Total errors" value={dataset.error_rows} accent delay={0.05} />
+              <Metric label="Filtered errors" value={filtered.length} accent delay={0.1} />
+              <Metric label="Matched images" value={total} delay={0.15} />
+              <Metric
+                label="Triaged"
+                value={triagedCount}
+                suffix={filtered.length ? ` / ${filtered.length.toLocaleString()}` : ""}
+                delay={0.2}
+              />
+            </div>
 
-      {/* ── Filters + export ── */}
-      <div className="mb-4 rounded-xl border border-line bg-wash p-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <div>
-            <label className="field-label">
-              Error type ({counts.wg.toLocaleString()} / {counts.wc.toLocaleString()})
-            </label>
-            <select className="field" value={errFilter} onChange={(e) => setErrFilter(e.target.value as typeof errFilter)}>
-              <option value="any">Any error</option>
-              <option value="both">Wrong group</option>
-              <option value="class">Wrong class only</option>
-            </select>
-          </div>
-          <div>
-            <label className="field-label">SKU name</label>
-            <input className="field" placeholder="Actual or predicted…" value={skuSearch} onChange={(e) => setSkuSearch(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label">Date</label>
-            <select className="field" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-              {dates.map((d) => <option key={d}>{d}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="field-label">Shop</label>
-            <select className="field" value={shopFilter} onChange={(e) => setShopFilter(e.target.value)}>
-              {shops.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="field-label">Image ID</label>
-            <input className="field font-mono" placeholder="e.g. 113353766" value={imgIdSearch} onChange={(e) => setImgIdSearch(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label">Annotation ID</label>
-            <input className="field font-mono" placeholder="e.g. 4480908741" value={annIdSearch} onChange={(e) => setAnnIdSearch(e.target.value)} />
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-end gap-2 border-t border-line pt-3">
-          <span className="mr-auto text-[11px] text-mute">
-            Export includes triage status + remarks for the {filtered.length.toLocaleString()} filtered rows
-          </span>
-          <button className="btn" onClick={() => exportRows(filtered, dataset.name, "csv")} disabled={!filtered.length}>
-            ↓ CSV
-          </button>
-          <button className="btn" onClick={() => exportRows(filtered, dataset.name, "xlsx")} disabled={!filtered.length}>
-            ↓ Excel
-          </button>
-        </div>
-      </div>
+            {/* ── Filters ── */}
+            <div className="mb-4 rounded-xl border border-line bg-wash p-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <div>
+                  <label className="field-label">
+                    Error type ({counts.wg.toLocaleString()} / {counts.wc.toLocaleString()})
+                  </label>
+                  <select className="field" value={errFilter} onChange={(e) => setErrFilter(e.target.value as typeof errFilter)}>
+                    <option value="any">Any error</option>
+                    <option value="both">Wrong group</option>
+                    <option value="class">Wrong class only</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">SKU name</label>
+                  <input className="field" placeholder="Actual or predicted…" value={skuSearch} onChange={(e) => setSkuSearch(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">Date</label>
+                  <select className="field" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
+                    {dates.map((d) => <option key={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Shop</label>
+                  <select className="field" value={shopFilter} onChange={(e) => setShopFilter(e.target.value)}>
+                    {shops.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Image ID</label>
+                  <input className="field font-mono" placeholder="e.g. 113353766" value={imgIdSearch} onChange={(e) => setImgIdSearch(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">Annotation ID</label>
+                  <input className="field font-mono" placeholder="e.g. 4480908741" value={annIdSearch} onChange={(e) => setAnnIdSearch(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {total === 0 ? (
         <div className="rounded-xl border border-err-group/30 bg-err-group/5 p-6 text-center">
@@ -471,22 +497,24 @@ export default function DatasetPage() {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="mb-3 flex flex-wrap items-center gap-1.5"
+              className="mb-3 flex flex-wrap items-center justify-between gap-2"
             >
-              <Pill>{first.shop_name ?? "—"}</Pill>
-              <Pill>{first.category_name ?? "—"}</Pill>
-              <Pill>{first.visit_date ?? "—"}</Pill>
-              <Pill mono>ID {current[0]}</Pill>
-              <Pill accent>{rows.length} error annotation{rows.length !== 1 && "s"}</Pill>
-              {rows.every((r) => r.triage_status) && (
-                <Pill green>✓ fully triaged</Pill>
-              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Pill>{first.shop_name ?? "—"}</Pill>
+                <Pill>{first.category_name ?? "—"}</Pill>
+                <Pill>{first.visit_date ?? "—"}</Pill>
+                <Pill mono>ID {current[0]}</Pill>
+                <Pill accent>{rows.length} error annotation{rows.length !== 1 && "s"}</Pill>
+                {rows.every((r) => r.triage_status) && (
+                  <Pill green>✓ fully triaged</Pill>
+                )}
+              </div>
               {first.annotated_image_link && (
                 <a
                   href={first.annotated_image_link}
                   target="_blank"
                   rel="noreferrer"
-                  className="ml-1 text-[12px] font-semibold text-brand transition-opacity hover:opacity-70"
+                  className="text-[12px] font-semibold text-[var(--color-brand)] transition-opacity hover:opacity-70"
                 >
                   Open in ShelfWatch viewer ↗
                 </a>
@@ -494,9 +522,68 @@ export default function DatasetPage() {
             </motion.div>
           )}
 
+          {/* ── Horizontal Remarks Bar directly above Viewer ── */}
+          {activeAnn && (
+            <motion.div
+              key={activeAnn.id ?? activeAnn.annotation_id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-paper px-4 py-2.5 shadow-card"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-mute">
+                  Remarks:
+                </span>
+                <span className="rounded bg-wash px-2 py-0.5 font-mono text-[11px] font-bold text-ink">
+                  {activeAnn.annotation_id ? `#${activeAnn.annotation_id}` : `Box 1 of ${rows.length}`}
+                </span>
+                {rows.length > 1 && !selected && (
+                  <span className="text-[11px] text-mute italic">
+                    (click box on image to switch box)
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    ["incorrectly_tagged", "1. Incorrectly Tagged"],
+                    ["ai_mistake", "2. AI mistake"],
+                    ["visibility_issues", "3. Visibility issues"],
+                    ["sku_partially_visible", "4. SKU partially visible"],
+                    ["ambiguous", "5. Ambiguous"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const active = activeAnn.triage_status === key;
+                  const meta = TRIAGE_META[key];
+                  return (
+                    <button
+                      key={key}
+                      onClick={() =>
+                        updateTriage(activeAnn, {
+                          triage_status: active ? null : key,
+                        })
+                      }
+                      className={`btn h-7 px-2.5 text-[11px] font-semibold transition-all ${
+                        active
+                          ? "!border-transparent !text-white shadow-card scale-[1.03]"
+                          : "hover:border-ink/40 text-soot"
+                      }`}
+                      style={active ? { background: meta.hex } : undefined}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
           {/* ── Stage + panel ── */}
-          <div className="flex flex-col gap-3 lg:flex-row">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3 lg:flex-row overflow-x-auto">
+            <div
+              className="min-w-0 transition-all duration-200"
+              style={{ width: viewWPct === 100 ? "100%" : `${viewWPct}%`, flex: viewWPct === 100 ? "1 1 0%" : "none" }}
+            >
               <AnimatePresence mode="wait">
                 <motion.div
                   key={current[0]}
@@ -559,7 +646,8 @@ export default function DatasetPage() {
                           return (
                             <tr
                               key={r.annotation_id ?? i}
-                              className={`border-b border-line/60 transition-colors last:border-0 ${
+                              onClick={() => setSelected(r)}
+                              className={`border-b border-line/60 transition-colors last:border-0 cursor-pointer ${
                                 isSel ? "bg-brand-soft" : "hover:bg-wash"
                               }`}
                             >
@@ -659,7 +747,7 @@ function Pill({
     <span
       className={`rounded-full px-3 py-1 text-[12px] font-medium ${
         accent
-          ? "bg-brand-soft font-semibold text-brand"
+          ? "bg-brand-soft font-semibold text-[var(--color-brand)]"
           : green
           ? "bg-emerald-50 font-semibold text-emerald-700"
           : "bg-wash text-soot"

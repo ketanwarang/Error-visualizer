@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { SettingsProvider } from "@/components/SettingsContext";
+import { ExportProvider } from "@/components/ExportContext";
 import Logo from "@/components/Logo";
 import SettingsPanel from "@/components/SettingsPanel";
+import HeaderDownloadButton from "@/components/HeaderDownloadButton";
 
 export const metadata: Metadata = {
   title: "ShelfWatch · Error Annotation Portal",
@@ -35,23 +37,28 @@ export default function RootLayout({
       </head>
       <body className="font-sans">
         <SettingsProvider>
-          <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
-            <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
-              <Link href="/" className="group flex items-center gap-3">
-                <Logo />
-                <span>
-                  <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
-                    ParallelDots · ShelfWatch
+          <ExportProvider>
+            <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
+              <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
+                <Link href="/" className="group flex items-center gap-3">
+                  <Logo />
+                  <span>
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
+                      ParallelDots · ShelfWatch
+                    </span>
+                    <span className="block text-[15px] font-bold leading-tight text-ink">
+                      Error Annotation Portal
+                    </span>
                   </span>
-                  <span className="block text-[15px] font-bold leading-tight text-ink">
-                    Error Annotation Portal
-                  </span>
-                </span>
-              </Link>
-              <SettingsPanel />
-            </div>
-          </header>
-          <main className="mx-auto max-w-[1440px] px-6 py-6">{children}</main>
+                </Link>
+                <div className="flex items-center gap-2">
+                  <HeaderDownloadButton />
+                  <SettingsPanel />
+                </div>
+              </div>
+            </header>
+            <main className="mx-auto max-w-[1440px] px-6 py-6">{children}</main>
+          </ExportProvider>
         </SettingsProvider>
       </body>
     </html>

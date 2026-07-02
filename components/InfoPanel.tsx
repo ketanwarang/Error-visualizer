@@ -1,22 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  AnnRow,
-  ERROR_META,
-  TRIAGE_META,
-  TriageStatus,
-  errorType,
-  proxied,
-} from "@/lib/types";
+import { AnnRow, ERROR_META, errorType, proxied } from "@/lib/types";
 
 interface Props {
   ann: AnnRow | null;
   classImages: Record<string, string[]>;
   hasClassInfo: boolean;
   height?: number;
-  onTriage: (ann: AnnRow, patch: Partial<AnnRow>) => void;
+  onTriage?: (ann: AnnRow, patch: Partial<AnnRow>) => void;
 }
 
 export default function InfoPanel({
@@ -24,13 +17,44 @@ export default function InfoPanel({
   classImages,
   hasClassInfo,
   height = 660,
-  onTriage,
 }: Props) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  if (isCollapsed) {
+    return (
+      <aside
+        className="flex w-10 shrink-0 flex-col items-center justify-between overflow-hidden rounded-xl border border-line bg-paper py-3 cursor-pointer hover:bg-wash transition-colors"
+        style={{ height }}
+        onClick={() => setIsCollapsed(false)}
+        title="Expand details panel"
+      >
+        <div className="text-[12px] font-bold text-mute">←</div>
+        <div className="writing-vertical text-[11px] font-bold uppercase tracking-wider text-soot">
+          Inspection Details
+        </div>
+        <div className="text-[12px] font-bold text-mute">←</div>
+      </aside>
+    );
+  }
+
   return (
     <aside
-      className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-paper"
+      className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-paper transition-all"
       style={{ height }}
     >
+      <div className="flex items-center justify-between border-b border-line bg-wash px-3 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-mute">
+          Inspection Details
+        </span>
+        <button
+          onClick={() => setIsCollapsed(true)}
+          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-mute hover:bg-paper hover:text-ink transition-colors"
+          title="Collapse panel to right side"
+        >
+          Hide →
+        </button>
+      </div>
+
       <AnimatePresence mode="wait">
         {!ann ? (
           <motion.div
@@ -46,10 +70,8 @@ export default function InfoPanel({
                 🎯
               </div>
               <p className="text-[13px] leading-relaxed text-mute">
-                Hover over a bounding box —<br />
-                its details stay pinned here
-                <br />
-                until you hover the next one
+                Hover or select an error box —<br />
+                its classification and reference images appear pinned here.
               </p>
             </div>
           </motion.div>
@@ -59,7 +81,6 @@ export default function InfoPanel({
             ann={ann}
             classImages={classImages}
             hasClassInfo={hasClassInfo}
-            onTriage={onTriage}
           />
         )}
       </AnimatePresence>
@@ -71,12 +92,10 @@ function Detail({
   ann,
   classImages,
   hasClassInfo,
-  onTriage,
 }: {
   ann: AnnRow;
   classImages: Record<string, string[]>;
   hasClassInfo: boolean;
-  onTriage: (ann: AnnRow, patch: Partial<AnnRow>) => void;
 }) {
   const et = errorType(ann.wrong_group, ann.wrong_class);
   const meta = ERROR_META[et];
@@ -116,11 +135,11 @@ function Detail({
           {ann.predicted_class ?? "—"}
         </p>
         <p className="pt-1 text-[11px] text-mute">
-          GT: {ann.actual_group ?? "—"} · Pred: {ann.predicted_group ?? "—"}
+          GT group: {ann.actual_group ?? "—"} · Pred group: {ann.predicted_group ?? "—"}
         </p>
       </div>
 
-      {/* ── Collapsible image section ── */}
+      {/* ── Collapsible reference image section ── */}
       <div className="shrink-0 border-b border-line">
         <button
           onClick={() => setImagesOpen((o) => !o)}
@@ -152,7 +171,7 @@ function Detail({
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="slim-scroll max-h-[240px] overflow-y-auto px-4 pb-3">
+              <div className="slim-scroll max-h-[260px] overflow-y-auto px-4 pb-3">
                 {hasClassInfo ? (
                   <>
                     <RefStrip
@@ -176,74 +195,20 @@ function Detail({
         </AnimatePresence>
       </div>
 
-      {/* Spacer */}
-      <div className="min-h-0 flex-1" />
-
-      <RemarksBox ann={ann} onTriage={onTriage} />
-    </motion.div>
-  );
-}
-
-function RemarksBox({
-  ann,
-  onTriage,
-}: {
-  ann: AnnRow;
-  onTriage: (ann: AnnRow, patch: Partial<AnnRow>) => void;
-}) {
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setSaved(false);
-  }, [ann.id, ann.annotation_id]);
-
-  return (
-    <div className="shrink-0 border-t border-line bg-wash px-3 py-3">
-      <p className="mb-2 flex items-center justify-between text-[9px] font-bold uppercase tracking-[0.08em] text-mute">
-        Remarks
-        <span
-          className={`font-medium normal-case tracking-normal text-emerald-600 transition-opacity ${
-            saved ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          Saved ✓
-        </span>
-      </p>
-      <div className="grid grid-cols-2 gap-1.5">
-        {(Object.keys(TRIAGE_META) as TriageStatus[]).map((s) => {
-          const m = TRIAGE_META[s];
-          const active = ann.triage_status === s;
-          return (
-            <button
-              key={s}
-              onClick={() => {
-                onTriage(ann, { triage_status: active ? null : s });
-                setSaved(true);
-                setTimeout(() => setSaved(false), 1500);
-              }}
-              className="flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-[10px] font-semibold transition-all duration-150"
-              style={{
-                borderColor: active ? m.hex : "var(--color-line)",
-                background: active ? m.hex : "var(--color-paper)",
-                color: active ? "#fff" : m.hex,
-              }}
-              title={`${m.label} (press ${m.key})`}
-            >
-              <span className="text-center leading-tight">{m.label}</span>
-              <span
-                className="rounded px-1 font-mono text-[8px]"
-                style={{
-                  background: active ? "rgba(255,255,255,.2)" : "var(--color-wash)",
-                  color: active ? "#fff" : "var(--color-mute)",
-                }}
-              >
-                {m.key}
-              </span>
-            </button>
-          );
-        })}
+      <div className="min-h-0 flex-1 p-4 text-[11px] text-mute leading-relaxed">
+        <p>
+          <b className="text-soot">Visit Date:</b> {ann.visit_date ?? "—"}
+        </p>
+        <p className="mt-1">
+          <b className="text-soot">Shop:</b> {ann.shop_name ?? "—"}
+        </p>
+        {ann.remarks && (
+          <p className="mt-2 rounded bg-wash p-2 text-soot italic">
+            &ldquo;{ann.remarks}&rdquo;
+          </p>
+        )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 

@@ -130,33 +130,60 @@ export default function SettingsPanel() {
               </Section>
 
               {/* ── Image Viewer Size ── */}
-              <Section title="Image viewer size">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="1.5"
-                    step="0.05"
-                    value={settings.viewerScale}
-                    onChange={(e) =>
-                      update({ viewerScale: Number(e.target.value) })
+              <Section title="Image viewer dimensions">
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-soot">
+                      <span>Height zoom</span>
+                      <span className="font-mono font-semibold text-ink">
+                        {Math.round(settings.viewerScale * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.5"
+                      step="0.05"
+                      value={settings.viewerScale}
+                      onChange={(e) =>
+                        update({ viewerScale: Number(e.target.value) })
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-brand)]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-soot">
+                      <span>Width zoom</span>
+                      <span className="font-mono font-semibold text-ink">
+                        {Math.round((settings.viewerWidthScale ?? 1.0) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.5"
+                      step="0.05"
+                      value={settings.viewerWidthScale ?? 1.0}
+                      onChange={(e) =>
+                        update({ viewerWidthScale: Number(e.target.value) })
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-brand)]"
+                    />
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      update({
+                        viewerScale: DEFAULT_SETTINGS.viewerScale,
+                        viewerWidthScale: DEFAULT_SETTINGS.viewerWidthScale,
+                      })
                     }
-                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-brand)]"
-                  />
-                  <span className="w-12 text-right font-mono text-[12px] font-semibold text-ink">
-                    {Math.round(settings.viewerScale * 100)}%
-                  </span>
+                    className="text-[11px] font-medium text-mute transition-colors hover:text-[var(--color-brand)]"
+                  >
+                    Reset dimensions to default
+                  </button>
                 </div>
-                <button
-                  onClick={() =>
-                    update({
-                      viewerScale: DEFAULT_SETTINGS.viewerScale,
-                    })
-                  }
-                  className="mt-1.5 text-[11px] font-medium text-mute transition-colors hover:text-[var(--color-brand)]"
-                >
-                  Reset to {Math.round(DEFAULT_SETTINGS.viewerScale * 100)}%
-                </button>
               </Section>
 
               {/* ── Error Colors ── */}

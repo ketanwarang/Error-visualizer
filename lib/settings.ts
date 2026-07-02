@@ -21,6 +21,8 @@ export const ACCENT_PRESETS = [
 export interface AppSettings {
   /** Image viewer height multiplier, 0.5–1.5 (default 0.85 = 15 % smaller). */
   viewerScale: number;
+  /** Image viewer width multiplier, 0.5–1.5 (default 1.0). */
+  viewerWidthScale: number;
   /** Light / dark / system. */
   theme: ThemeMode;
   /** Active accent hex — one of the VIBGYOR presets. */
@@ -35,6 +37,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   viewerScale: 0.85,
+  viewerWidthScale: 1.0,
   theme: "system",
   accentColor: "#E8501A",
   errorColors: {
