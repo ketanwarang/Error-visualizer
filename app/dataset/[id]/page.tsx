@@ -460,36 +460,6 @@ export default function DatasetPage() {
         </div>
       ) : (
         <>
-          {/* ── Navigation ── */}
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button className="btn" disabled={safeIdx === 0} onClick={() => jumpTo(0)} title="First image">⏮</button>
-            <button className="btn" disabled={safeIdx === 0} onClick={goPrev}>← Prev</button>
-            <button className="btn" disabled={safeIdx >= total - 1} onClick={goNext}>Next →</button>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                max={total}
-                value={safeIdx + 1}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  if (Number.isFinite(v)) jumpTo(Math.min(Math.max(1, v), total) - 1);
-                }}
-                className="field w-20 text-center font-mono font-semibold"
-              />
-              <span className="text-[12px] font-medium text-mute">of {total.toLocaleString()}</span>
-            </div>
-            <button className="btn" disabled={safeIdx >= total - 1} onClick={() => jumpTo(total - 1)} title="Last image">⏭</button>
-
-            <div className="ml-auto h-1.5 w-40 overflow-hidden rounded-full bg-line">
-              <motion.div
-                className="h-full rounded-full bg-brand"
-                animate={{ width: `${((safeIdx + 1) / total) * 100}%` }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-              />
-            </div>
-          </div>
-
           {/* ── Meta pills ── */}
           {first && (
             <motion.div
@@ -581,9 +551,81 @@ export default function DatasetPage() {
           {/* ── Stage + panel ── */}
           <div className="flex flex-col gap-3 lg:flex-row overflow-x-auto">
             <div
-              className="min-w-0 transition-all duration-200"
+              className="min-w-0 transition-all duration-200 relative group/viewer overflow-hidden rounded-xl"
               style={{ width: viewWPct === 100 ? "100%" : `${viewWPct}%`, flex: viewWPct === 100 ? "1 1 0%" : "none" }}
             >
+              {/* Left Hover Arrow (Previous) */}
+              <button
+                onClick={goPrev}
+                disabled={safeIdx === 0}
+                className="absolute left-0 top-0 bottom-0 z-30 w-12 flex items-center justify-center bg-gradient-to-r from-black/60 via-black/20 to-transparent text-white/70 hover:text-white hover:from-black/80 opacity-0 group-hover/viewer:opacity-100 transition-all duration-200 disabled:opacity-0 cursor-pointer"
+                title="Previous Image (Left Arrow / S)"
+              >
+                <span className="text-3xl font-light">‹</span>
+              </button>
+
+              {/* Right Hover Arrow (Next) */}
+              <button
+                onClick={goNext}
+                disabled={safeIdx >= total - 1}
+                className="absolute right-0 top-0 bottom-0 z-30 w-12 flex items-center justify-center bg-gradient-to-l from-black/60 via-black/20 to-transparent text-white/70 hover:text-white hover:from-black/80 opacity-0 group-hover/viewer:opacity-100 transition-all duration-200 disabled:opacity-0 cursor-pointer"
+                title="Next Image (Right Arrow / F)"
+              >
+                <span className="text-3xl font-light">›</span>
+              </button>
+
+              {/* Translucent Embedded Bottom Navigation Pill */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 rounded-full bg-black/65 backdrop-blur-md px-3 py-1.5 text-white shadow-pop opacity-85 hover:opacity-100 transition-opacity border border-white/15">
+                <button
+                  onClick={() => jumpTo(0)}
+                  disabled={safeIdx === 0}
+                  className="p-1 text-[11px] hover:text-[var(--color-brand)] disabled:opacity-30 transition-colors"
+                  title="First image"
+                >
+                  ⏮
+                </button>
+                <button
+                  onClick={goPrev}
+                  disabled={safeIdx === 0}
+                  className="px-2 py-0.5 text-[12px] font-medium hover:text-[var(--color-brand)] disabled:opacity-30 transition-colors"
+                  title="Previous image (S)"
+                >
+                  ← Prev
+                </button>
+
+                <div className="flex items-center gap-1.5 px-2.5 border-x border-white/20">
+                  <input
+                    type="number"
+                    min={1}
+                    max={total}
+                    value={safeIdx + 1}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (Number.isFinite(v)) jumpTo(Math.min(Math.max(1, v), total) - 1);
+                    }}
+                    className="w-14 rounded bg-white/15 px-1.5 py-0.5 text-center font-mono text-[12px] font-bold text-white outline-none transition-colors focus:bg-white/25 focus:ring-1 focus:ring-[var(--color-brand)]"
+                  />
+                  <span className="text-[12px] font-medium text-white/80 whitespace-nowrap">of {total.toLocaleString()}</span>
+                </div>
+
+                <button
+                  onClick={goNext}
+                  disabled={safeIdx >= total - 1}
+                  className="px-2 py-0.5 text-[12px] font-medium hover:text-[var(--color-brand)] disabled:opacity-30 transition-colors"
+                  title="Next image (F)"
+                >
+                  Next →
+                </button>
+                <button
+                  onClick={() => jumpTo(total - 1)}
+                  disabled={safeIdx >= total - 1}
+                  className="p-1 text-[11px] hover:text-[var(--color-brand)] disabled:opacity-30 transition-colors"
+                  title="Last image"
+                >
+                  ⏭
+                </button>
+              </div>
+
               <AnimatePresence mode="wait">
                 <motion.div
                   key={current[0]}

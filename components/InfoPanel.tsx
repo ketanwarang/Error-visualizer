@@ -125,88 +125,91 @@ function Detail({
       >
         {meta.label}
       </div>
-      <div className="shrink-0 space-y-1 border-b border-line px-4 py-3 text-[12px] leading-relaxed text-soot">
-        <p>
-          <b className="font-semibold text-ink">Actual:</b>{" "}
-          {ann.actual_class ?? "—"}
-        </p>
-        <p>
-          <b className="font-semibold text-ink">Predicted:</b>{" "}
-          {ann.predicted_class ?? "—"}
-        </p>
-        <p className="pt-1 text-[11px] text-mute">
-          GT group: {ann.actual_group ?? "—"} · Pred group: {ann.predicted_group ?? "—"}
-        </p>
-      </div>
 
-      {/* ── Collapsible reference image section ── */}
-      <div className="shrink-0 border-b border-line">
-        <button
-          onClick={() => setImagesOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-4 py-2 text-[10px] font-bold uppercase tracking-[0.07em] text-mute transition-colors hover:text-ink"
-        >
-          <span>Reference images</span>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`transition-transform duration-200 ${
-              imagesOpen ? "rotate-180" : ""
-            }`}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
-        <AnimatePresence>
-          {imagesOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="slim-scroll max-h-[260px] overflow-y-auto px-4 pb-3">
-                {hasClassInfo ? (
-                  <>
-                    <RefStrip
-                      title={`Actual — ${ann.actual_class ?? "—"}`}
-                      urls={actualImgs}
-                    />
-                    <RefStrip
-                      title={`Predicted — ${ann.predicted_class ?? "—"}`}
-                      urls={predImgs}
-                    />
-                  </>
-                ) : (
-                  <p className="text-[11px] italic text-mute">
-                    Upload the CGC file with a dataset to see SKU reference
-                    images here.
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="min-h-0 flex-1 p-4 text-[11px] text-mute leading-relaxed">
-        <p>
-          <b className="text-soot">Visit Date:</b> {ann.visit_date ?? "—"}
-        </p>
-        <p className="mt-1">
-          <b className="text-soot">Shop:</b> {ann.shop_name ?? "—"}
-        </p>
-        {ann.remarks && (
-          <p className="mt-2 rounded bg-wash p-2 text-soot italic">
-            &ldquo;{ann.remarks}&rdquo;
+      <div className="flex-1 min-h-0 overflow-y-auto slim-scroll">
+        <div className="space-y-1 border-b border-line px-4 py-3 text-[12px] leading-relaxed text-soot">
+          <p>
+            <b className="font-semibold text-ink">Actual:</b>{" "}
+            {ann.actual_class ?? "—"}
           </p>
-        )}
+          <p>
+            <b className="font-semibold text-ink">Predicted:</b>{" "}
+            {ann.predicted_class ?? "—"}
+          </p>
+          <p className="pt-1 text-[11px] text-mute">
+            GT group: {ann.actual_group ?? "—"} · Pred group: {ann.predicted_group ?? "—"}
+          </p>
+        </div>
+
+        {/* ── Collapsible reference image section ── */}
+        <div className="border-b border-line">
+          <button
+            onClick={() => setImagesOpen((o) => !o)}
+            className="flex w-full items-center justify-between px-4 py-2 text-[10px] font-bold uppercase tracking-[0.07em] text-mute transition-colors hover:text-ink"
+          >
+            <span>Reference images</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform duration-200 ${
+                imagesOpen ? "rotate-180" : ""
+              }`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          <AnimatePresence>
+            {imagesOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-3 pt-1">
+                  {hasClassInfo ? (
+                    <>
+                      <RefStrip
+                        title={`Actual — ${ann.actual_class ?? "—"}`}
+                        urls={actualImgs}
+                      />
+                      <RefStrip
+                        title={`Predicted — ${ann.predicted_class ?? "—"}`}
+                        urls={predImgs}
+                      />
+                    </>
+                  ) : (
+                    <p className="text-[11px] italic text-mute">
+                      Upload the CGC file with a dataset to see SKU reference
+                      images here.
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="p-4 text-[11px] text-mute leading-relaxed">
+          <p>
+            <b className="text-soot">Visit Date:</b> {ann.visit_date ?? "—"}
+          </p>
+          <p className="mt-1">
+            <b className="text-soot">Shop:</b> {ann.shop_name ?? "—"}
+          </p>
+          {ann.remarks && (
+            <p className="mt-2 rounded bg-wash p-2 text-soot italic">
+              &ldquo;{ann.remarks}&rdquo;
+            </p>
+          )}
+        </div>
       </div>
     </motion.div>
   );

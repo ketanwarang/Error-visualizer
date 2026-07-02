@@ -47,6 +47,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
     const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
     const animRef = useRef<number | null>(null);
     const sizeRef = useRef({ w: 1060, h: height });
+    const lastDimsRef = useRef({ w: 0, h: 0 });
 
     const { settings } = useSettings();
     const errColors = settings.errorColors;
@@ -74,6 +75,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, VW, VH);
+
       ctx.save();
       ctx.translate(offX, offY);
       ctx.scale(scale, scale);
@@ -169,9 +171,16 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       const el = wrapRef.current;
       if (!el) return;
       const ro = new ResizeObserver(() => {
-        sizeRef.current = { w: el.clientWidth, h: height };
+        const w = el.clientWidth;
+        const h = height;
+        const dw = Math.abs(lastDimsRef.current.w - w);
+        const dh = Math.abs(lastDimsRef.current.h - h);
+        sizeRef.current = { w, h };
         if (status === "ready") {
-          viewRef.current = fitView();
+          if (dw > 2 || dh > 2) {
+            lastDimsRef.current = { w, h };
+            viewRef.current = fitView();
+          }
           redraw();
         }
       });
@@ -188,8 +197,12 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       im.onload = () => {
         imgRef.current = im;
         const el = wrapRef.current;
-        if (el) sizeRef.current = { w: el.clientWidth, h: height };
+        if (el) {
+          sizeRef.current = { w: el.clientWidth, h: height };
+          lastDimsRef.current = { w: el.clientWidth, h: height };
+        }
         viewRef.current = fitView();
+        fitScaleRef.current = viewRef.current.scale;
         setStatus("ready");
         requestAnimationFrame(redraw);
       };
