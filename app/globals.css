@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --font-inter: "Inter";
+  --font-plex-mono: "IBM Plex Mono";
+}
+
+body {
+  @apply bg-paper text-ink antialiased;
+}
+
+/* ── Keycap for keyboard shortcuts (s / d / f) ─────────────────────────── */
+.keycap {
+  @apply inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md
+    border border-line bg-wash px-1.5 font-mono text-[11px] font-semibold text-soot;
+  box-shadow: 0 1.5px 0 #dcdce0;
+}
+.keycap-dark {
+  @apply inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-[5px]
+    px-1.5 font-mono text-[10px] font-semibold;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* ── Field styling ──────────────────────────────────────────────────────── */
+.field-label {
+  @apply mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-mute;
+}
+.field {
+  @apply h-9 w-full rounded-lg border border-line bg-paper px-3 text-[13px]
+    text-ink outline-none transition-all duration-150 placeholder:text-mute/70;
+}
+.field:hover {
+  @apply border-[#dcdce0];
+}
+.field:focus {
+  @apply border-brand ring-2 ring-brand/15;
+}
+select.field {
+  @apply cursor-pointer appearance-none bg-no-repeat pr-8;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239B9BA3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border
+    border-line bg-paper px-3.5 text-[13px] font-medium text-soot
+    transition-all duration-150;
+}
+.btn:hover:not(:disabled) {
+  @apply -translate-y-px border-brand/50 text-brand shadow-card;
+}
+.btn:active:not(:disabled) {
+  @apply translate-y-0 shadow-none;
+}
+.btn:disabled {
+  @apply cursor-not-allowed opacity-30;
+}
+.btn-primary {
+  @apply border-transparent bg-brand text-white;
+}
+.btn-primary:hover:not(:disabled) {
+  @apply border-transparent bg-[#d1440f] text-white;
+}
+
+/* ── Shimmer skeleton ───────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #f2f2f4 25%, #fafafa 50%, #f2f2f4 75%);
+  background-size: 800px 100%;
+  @apply animate-shimmer;
+}
+
+/* ── Slim scrollbars ────────────────────────────────────────────────────── */
+.slim-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.slim-scroll::-webkit-scrollbar-thumb {
+  background: #dcdce0;
+  border-radius: 999px;
+}
+.slim-scroll::-webkit-scrollbar-thumb:hover {
+  background: #c4c4ca;
+}
+.slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Focus visibility ───────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #e8501a;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

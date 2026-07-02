@@ -1,55 +1,80 @@
-# ShelfWatch Error Annotation Portal
+# ShelfWatch Error Annotation Portal — Next.js + Supabase
 
-A Streamlit portal to visually inspect ShelfWatch recognition errors.  
-Upload your `df_out` CSV and see every wrong detection overlaid on the shelf image — with cropped zoom panels per annotation.
+Visually inspect ShelfWatch recognition errors overlaid on shelf images.
+Upload a `df_out` CSV once — it's parsed in the browser and persisted to
+Supabase, so the whole team can open the same dataset by URL, no re-uploads.
 
 ## What it shows
 
 - Only `annotation_type = SKU` rows where `wrong_group = 1` OR `wrong_class = 1`
 - Bounding boxes color-coded:
-  - 🟣 Purple — wrong group + wrong class
-  - 🟠 Amber — wrong group only
-  - 🔴 Red — wrong class only
-- Cropped zoom strip below each image (one tile per error annotation)
-- Annotation detail table (collapsible) with actual vs. predicted labels
-- Direct link to the ShelfWatch viewer per image
+  - 🟣 Purple — wrong group + wrong class (WG+WC)
+  - 🟠 Amber — wrong group only (WG)
+  - 🔴 Red — wrong class only (WC)
+- Full pan/zoom canvas stage with hover zoom lens + annotation detail panel
+- SKU reference images per annotation (optional class info CSV)
+- Annotation table, direct ShelfWatch viewer link per image
 
-## Filters
+## Keyboard shortcuts
 
-- Error type (any / WG+WC / WG only / WC only)
-- Category, Shop, Date
-- Images per page (4–24)
-- Toggle zoom strip and annotation tables on/off
+| Key | Action |
+|-----|--------|
+| `s` (or `←`) | Previous image |
+| `d` (or double-click) | Reset zoom to 100% (animated) |
+| `f` (or `→`) | Next image |
 
-## Run locally
+Shortcuts are ignored while typing in any filter field.
+
+## Setup
+
+### 1. Supabase (once)
+
+1. Create a project at https://supabase.com (free tier is fine)
+2. Open **SQL Editor → New query**, paste `supabase/schema.sql`, run it
+3. Grab **Project Settings → API → URL** and **anon public key**
+
+### 2. Local run
 
 ```bash
-# 1. Clone / download this folder
-cd shelfwatch_portal
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Run
-streamlit run app.py
+cp .env.local.example .env.local   # paste your URL + anon key
+npm install
+npm run dev                        # http://localhost:3000
 ```
 
-Opens at `http://localhost:8501` in your browser.
+### 3. Deploy to Vercel
 
-## Deploy to Streamlit Community Cloud (free)
+1. Push this folder to a GitHub repo
+2. Import the repo at https://vercel.com/new
+3. Add the two `NEXT_PUBLIC_SUPABASE_*` env vars in project settings
+4. Deploy — done
 
-1. Push this folder to a GitHub repo (public or private)
-2. Go to https://share.streamlit.io → **New app**
-3. Select your repo, branch `main`, file `app.py`
-4. Click **Deploy** — done. You get a public URL to share.
+## Architecture notes
 
-No server, no Docker, no config needed.
+- **CSV parsing is client-side** (PapaParse). Only SKU error rows are
+  persisted (`sw_annotations`); the full CSV never leaves the browser.
+- **Images are proxied** through `/api/img?u=` server-side — same reason the
+  Streamlit version fetched with `requests`: GCS/CDN hosts often block CORS
+  or want a browser User-Agent. Responses are cached for 24 h.
+- **RLS is open to the anon key** (internal tool). To lock it behind
+  Supabase magic-link auth, see the comment at the bottom of
+  `supabase/schema.sql`.
 
 ## Folder structure
 
 ```
-shelfwatch_portal/
-├── app.py            # main portal
-├── requirements.txt  # dependencies
-└── README.md
+shelfwatch-error-portal/
+├── app/
+│   ├── page.tsx              # dataset library + upload pipeline
+│   ├── dataset/[id]/page.tsx # viewer: filters, nav, shortcuts, table
+│   ├── api/img/route.ts      # server-side image proxy
+│   ├── layout.tsx            # top bar + legend
+│   └── globals.css
+├── components/
+│   ├── CanvasViewer.tsx      # pan/zoom stage, hover lens, animated reset
+│   └── InfoPanel.tsx         # annotation details + SKU reference images
+├── lib/
+│   ├── parse.ts              # df_out / class-info CSV parsing
+│   ├── supabase.ts
+│   └── types.ts
+└── supabase/schema.sql       # run once in Supabase SQL Editor
 ```
