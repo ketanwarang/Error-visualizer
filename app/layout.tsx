@@ -3,9 +3,11 @@ import Link from "next/link";
 import "./globals.css";
 import { SettingsProvider } from "@/components/SettingsContext";
 import { ExportProvider } from "@/components/ExportContext";
+import { CollabProvider } from "@/components/CollabContext";
 import Logo from "@/components/Logo";
 import SettingsPanel from "@/components/SettingsPanel";
 import HeaderDownloadButton from "@/components/HeaderDownloadButton";
+import HeaderCollabButton from "@/components/HeaderCollabButton";
 
 export const metadata: Metadata = {
   title: "AI Analysis Portal",
@@ -38,26 +40,29 @@ export default function RootLayout({
       <body className="font-sans">
         <SettingsProvider>
           <ExportProvider>
-            <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
-              <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
-                <a href="/" className="group flex items-center gap-3">
-                  <Logo size={32} />
-                  <span>
-                    <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
-                      Computer Vision Inspection
+            <CollabProvider>
+              <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
+                <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
+                  <a href="/" className="group flex items-center gap-3">
+                    <Logo size={32} />
+                    <span>
+                      <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
+                        Computer Vision Inspection
+                      </span>
+                      <span className="block text-[16px] font-bold leading-tight text-ink">
+                        AI Analysis Portal
+                      </span>
                     </span>
-                    <span className="block text-[16px] font-bold leading-tight text-ink">
-                      AI Analysis Portal
-                    </span>
-                  </span>
-                </a>
-                <div className="flex items-center gap-2">
-                  <HeaderDownloadButton />
-                  <SettingsPanel />
+                  </a>
+                  <div className="flex items-center gap-2">
+                    <HeaderCollabButton />
+                    <HeaderDownloadButton />
+                    <SettingsPanel />
+                  </div>
                 </div>
-              </div>
-            </header>
-            <main className="mx-auto max-w-[1440px] px-6 py-6">{children}</main>
+              </header>
+              <main className="mx-auto max-w-[1440px] px-6 py-6">{children}</main>
+            </CollabProvider>
           </ExportProvider>
         </SettingsProvider>
       </body>

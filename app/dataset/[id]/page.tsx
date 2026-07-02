@@ -23,6 +23,7 @@ import {
 import { getSession, saveSession } from "@/lib/sessions";
 import { useSettings } from "@/components/SettingsContext";
 import { useExport } from "@/components/ExportContext";
+import { useCollab } from "@/components/CollabContext";
 import CanvasViewer, { CanvasViewerHandle } from "@/components/CanvasViewer";
 import InfoPanel from "@/components/InfoPanel";
 import Filmstrip from "@/components/Filmstrip";
@@ -33,6 +34,7 @@ export default function DatasetPage() {
   const { id } = useParams<{ id: string }>();
   const { settings } = useSettings();
   const { setExportData, clearExportData } = useExport();
+  const { setCollabSession, trackImage } = useCollab();
 
   const viewH = Math.round(
     (typeof window !== "undefined" ? window.innerHeight : 780) *
@@ -150,6 +152,39 @@ export default function DatasetPage() {
     return () => clearExportData();
   }, [filtered, dataset, setExportData, clearExportData]);
 
+  /* Feed session info to header collab button & subscribe to Realtime annotation updates */
+  useEffect(() => {
+    if (dataset) {
+      setCollabSession(dataset.id, dataset.name);
+    }
+    return () => setCollabSession(null);
+  }, [dataset, setCollabSession]);
+
+  useEffect(() => {
+    if (!dataset?.id) return;
+    const ch = supabase
+      .channel(`sw_collab_data_${dataset.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sw_annotations",
+          filter: `dataset_id=eq.${dataset.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as AnnRow;
+          setAnns((prev) =>
+            prev ? prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)) : prev
+          );
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [dataset?.id]);
+
   const imageGroups = useMemo(() => {
     const m = new Map<string, AnnRow[]>();
     for (const a of filtered) {
@@ -165,6 +200,10 @@ export default function DatasetPage() {
   const current = imageGroups[safeIdx];
   const rows = useMemo(() => current?.[1] ?? [], [current]);
   const first = rows[0];
+
+  useEffect(() => {
+    trackImage(safeIdx);
+  }, [safeIdx, trackImage]);
 
   const dates = useMemo(
     () => ["All", ...Array.from(new Set((anns ?? []).map((a) => a.visit_date).filter(Boolean) as string[])).sort()],
