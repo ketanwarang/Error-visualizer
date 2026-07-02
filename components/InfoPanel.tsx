@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AnnRow,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/types";
 
 interface Props {
-  ann: AnnRow | null; // sticky: last hovered annotation, kept until the next one
+  ann: AnnRow | null;
   classImages: Record<string, string[]>;
   hasClassInfo: boolean;
   height?: number;
@@ -82,6 +82,7 @@ function Detail({
   const meta = ERROR_META[et];
   const actualImgs = classImages[ann.actual_class ?? ""] ?? [];
   const predImgs = classImages[ann.predicted_class ?? ""] ?? [];
+  const [imagesOpen, setImagesOpen] = useState(true);
 
   return (
     <motion.div
@@ -119,59 +120,87 @@ function Detail({
         </p>
       </div>
 
-      <div className="slim-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {hasClassInfo ? (
-          <>
-            <RefStrip
-              title={`Actual — ${ann.actual_class ?? "—"}`}
-              urls={actualImgs}
-            />
-            <RefStrip
-              title={`Predicted — ${ann.predicted_class ?? "—"}`}
-              urls={predImgs}
-            />
-          </>
-        ) : (
-          <p className="text-[11px] italic text-mute">
-            Upload the class info CSV with a dataset to see SKU reference
-            images here.
-          </p>
-        )}
+      {/* ── Collapsible image section ── */}
+      <div className="shrink-0 border-b border-line">
+        <button
+          onClick={() => setImagesOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-4 py-2 text-[10px] font-bold uppercase tracking-[0.07em] text-mute transition-colors hover:text-ink"
+        >
+          <span>Reference images</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`transition-transform duration-200 ${
+              imagesOpen ? "rotate-180" : ""
+            }`}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        <AnimatePresence>
+          {imagesOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="slim-scroll max-h-[240px] overflow-y-auto px-4 pb-3">
+                {hasClassInfo ? (
+                  <>
+                    <RefStrip
+                      title={`Actual — ${ann.actual_class ?? "—"}`}
+                      urls={actualImgs}
+                    />
+                    <RefStrip
+                      title={`Predicted — ${ann.predicted_class ?? "—"}`}
+                      urls={predImgs}
+                    />
+                  </>
+                ) : (
+                  <p className="text-[11px] italic text-mute">
+                    Upload the CGC file with a dataset to see SKU reference
+                    images here.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <TriageBox ann={ann} onTriage={onTriage} />
+      {/* Spacer */}
+      <div className="min-h-0 flex-1" />
+
+      <RemarksBox ann={ann} onTriage={onTriage} />
     </motion.div>
   );
 }
 
-function TriageBox({
+function RemarksBox({
   ann,
   onTriage,
 }: {
   ann: AnnRow;
   onTriage: (ann: AnnRow, patch: Partial<AnnRow>) => void;
 }) {
-  const [remarks, setRemarks] = useState(ann.remarks ?? "");
   const [saved, setSaved] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Re-sync when a different annotation is pinned
   useEffect(() => {
-    setRemarks(ann.remarks ?? "");
     setSaved(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ann.id, ann.annotation_id]);
-
-  const commitRemarks = (value: string) => {
-    onTriage(ann, { remarks: value.trim() === "" ? null : value });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  };
 
   return (
     <div className="shrink-0 border-t border-line bg-wash px-3 py-3">
       <p className="mb-2 flex items-center justify-between text-[9px] font-bold uppercase tracking-[0.08em] text-mute">
-        Triage
+        Remarks
         <span
           className={`font-medium normal-case tracking-normal text-emerald-600 transition-opacity ${
             saved ? "opacity-100" : "opacity-0"
@@ -180,7 +209,7 @@ function TriageBox({
           Saved ✓
         </span>
       </p>
-      <div className="mb-2 grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         {(Object.keys(TRIAGE_META) as TriageStatus[]).map((s) => {
           const m = TRIAGE_META[s];
           const active = ann.triage_status === s;
@@ -194,18 +223,18 @@ function TriageBox({
               }}
               className="flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-[10px] font-semibold transition-all duration-150"
               style={{
-                borderColor: active ? m.hex : "#ECECEE",
-                background: active ? m.hex : "#fff",
+                borderColor: active ? m.hex : "var(--color-line)",
+                background: active ? m.hex : "var(--color-paper)",
                 color: active ? "#fff" : m.hex,
               }}
               title={`${m.label} (press ${m.key})`}
             >
-              <span>{m.label}</span>
+              <span className="text-center leading-tight">{m.label}</span>
               <span
                 className="rounded px-1 font-mono text-[8px]"
                 style={{
-                  background: active ? "rgba(255,255,255,.2)" : "#F7F7F8",
-                  color: active ? "#fff" : "#9B9BA3",
+                  background: active ? "rgba(255,255,255,.2)" : "var(--color-wash)",
+                  color: active ? "#fff" : "var(--color-mute)",
                 }}
               >
                 {m.key}
@@ -214,19 +243,6 @@ function TriageBox({
           );
         })}
       </div>
-      <textarea
-        value={remarks}
-        onChange={(e) => {
-          setRemarks(e.target.value);
-          if (timer.current) clearTimeout(timer.current);
-          const v = e.target.value;
-          timer.current = setTimeout(() => commitRemarks(v), 900);
-        }}
-        onBlur={() => commitRemarks(remarks)}
-        placeholder="Remarks — saved automatically…"
-        rows={2}
-        className="slim-scroll w-full resize-none rounded-lg border border-line bg-paper px-2.5 py-2 text-[12px] leading-snug text-ink outline-none transition-all placeholder:text-mute/70 focus:border-brand focus:ring-2 focus:ring-brand/15"
-      />
     </div>
   );
 }

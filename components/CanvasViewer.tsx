@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { AnnRow, ERROR_META, TRIAGE_META, errorType, proxied } from "@/lib/types";
+import { useSettings } from "./SettingsContext";
 
 export interface CanvasViewerHandle {
   /** Animate back to 100% (fit-to-viewport). Bound to the `d` key. */
@@ -19,7 +20,7 @@ interface Props {
   imageUrl: string;
   anns: AnnRow[];
   height?: number;
-  onHover?: (index: number) => void; // -1 = nothing hovered
+  onHover?: (index: number) => void;
 }
 
 interface View {
@@ -46,6 +47,9 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
     const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
     const animRef = useRef<number | null>(null);
     const sizeRef = useRef({ w: 1060, h: height });
+
+    const { settings } = useSettings();
+    const errColors = settings.errorColors;
 
     const [status, setStatus] = useState<"loading" | "ready" | "failed">(
       "loading"
@@ -78,7 +82,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
 
       anns.forEach((a, i) => {
         const et = errorType(a.wrong_group, a.wrong_class);
-        const color = ERROR_META[et].hex;
+        const color = errColors[et] ?? ERROR_META[et].hex;
         const dim = hi !== -1 && i !== hi;
         ctx.globalAlpha = dim ? 0.28 : 1;
         ctx.fillStyle = color + "22";
@@ -97,20 +101,22 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
         ctx.fillText(tag, a.x_min + fs * 0.4, a.y_min - fs * 0.35);
         if (a.triage_status) {
           const tm = TRIAGE_META[a.triage_status];
-          const r = 9 / scale;
-          const cx = a.x_max - r * 1.3;
-          const cy = a.y_min + r * 1.3;
-          ctx.beginPath();
-          ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.fillStyle = tm.hex;
-          ctx.fill();
-          ctx.strokeStyle = "#fff";
-          ctx.lineWidth = 1.8 / scale;
-          ctx.beginPath();
-          ctx.moveTo(cx - r * 0.45, cy + r * 0.05);
-          ctx.lineTo(cx - r * 0.1, cy + r * 0.4);
-          ctx.lineTo(cx + r * 0.45, cy - r * 0.35);
-          ctx.stroke();
+          if (tm) {
+            const r = 9 / scale;
+            const cx = a.x_max - r * 1.3;
+            const cy = a.y_min + r * 1.3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.fillStyle = tm.hex;
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1.8 / scale;
+            ctx.beginPath();
+            ctx.moveTo(cx - r * 0.45, cy + r * 0.05);
+            ctx.lineTo(cx - r * 0.1, cy + r * 0.4);
+            ctx.lineTo(cx + r * 0.45, cy - r * 0.35);
+            ctx.stroke();
+          }
         }
         ctx.globalAlpha = 1;
       });
@@ -120,7 +126,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
         zoomBadgeRef.current.textContent = `${Math.round(
           (scale / fitScaleRef.current) * 100
         )}%`;
-    }, [anns]);
+    }, [anns, errColors]);
 
     const fitView = useCallback((): View => {
       const im = imgRef.current;
@@ -279,6 +285,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       const im = imgRef.current;
       if (!lens || !lc || !tip || !im) return;
       const et = errorType(a.wrong_group, a.wrong_class);
+      const color = errColors[et] ?? ERROR_META[et].hex;
       const meta = ERROR_META[et];
 
       // Crop the annotation + padding straight from the source image
@@ -303,7 +310,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       const dy = (LENS - dh) / 2;
       zctx.imageSmoothingEnabled = false;
       zctx.drawImage(im, sx, sy, sw, sh, dx, dy, dw, dh);
-      zctx.strokeStyle = meta.hex;
+      zctx.strokeStyle = color;
       zctx.lineWidth = 2;
       zctx.strokeRect(dx + (a.x_min - sx) * zs, dy + (a.y_min - sy) * zs, bw * zs, bh * zs);
 
@@ -312,11 +319,11 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       if (lx + LENS + 12 > window.innerWidth) lx = cx - LENS - 20;
       if (ly < 8) ly = cy + 20;
       lens.style.transform = `translate(${lx}px, ${ly}px)`;
-      lens.style.borderColor = meta.hex;
+      lens.style.borderColor = color;
       lens.style.opacity = "1";
 
       tip.innerHTML =
-        `<div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:${meta.hex};margin-bottom:4px">${meta.label}</div>` +
+        `<div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:${color};margin-bottom:4px">${meta.label}</div>` +
         `<div><b style="color:#fff">Actual:</b> ${a.actual_class ?? "—"}</div>` +
         `<div><b style="color:#fff">Predicted:</b> ${a.predicted_class ?? "—"}</div>` +
         `<div style="margin-top:4px;color:#8b8b93">GT group: ${a.actual_group ?? "—"}</div>` +
@@ -326,7 +333,7 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
       if (tx + 280 > window.innerWidth) tx = cx - 290;
       if (ty + 130 > window.innerHeight) ty = cy - 150;
       tip.style.transform = `translate(${tx}px, ${ty}px)`;
-      tip.style.borderLeftColor = meta.hex;
+      tip.style.borderLeftColor = color;
       tip.style.opacity = "1";
     };
 

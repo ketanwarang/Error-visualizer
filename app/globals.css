@@ -2,10 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Light theme (default) ──────────────────────────────────────────────── */
 :root {
   color-scheme: light;
   --font-inter: "Inter";
   --font-plex-mono: "IBM Plex Mono";
+
+  --color-ink: #101014;
+  --color-soot: #4B4B52;
+  --color-mute: #9B9BA3;
+  --color-line: #ECECEE;
+  --color-paper: #FFFFFF;
+  --color-wash: #F7F7F8;
+  --color-stage: #0E0E11;
+  --color-brand: #E8501A;
+  --color-brand-soft: #FDEEE7;
+  --color-err-both: #7C3AED;
+  --color-err-group: #F59E0B;
+  --color-err-class: #EF4444;
+}
+
+/* ── Dark theme (pitch black) ───────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-ink: #F0F0F2;
+  --color-soot: #B0B0B8;
+  --color-mute: #6B6B73;
+  --color-line: #1F1F24;
+  --color-paper: #000000;
+  --color-wash: #0A0A0C;
+  --color-stage: #000000;
+  --color-brand-soft: rgba(232, 80, 26, 0.12);
+}
+
+[data-theme="dark"] body {
+  background: #000000;
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #111114 25%, #1a1a1e 50%, #111114 75%);
+  background-size: 800px 100%;
+}
+
+[data-theme="dark"] .keycap {
+  @apply border-[#2a2a2e] bg-[#111114] text-[#999];
+  box-shadow: 0 1.5px 0 #1a1a1e;
+}
+
+[data-theme="dark"] .field {
+  @apply border-[#1F1F24] bg-[#0A0A0C] text-[#F0F0F2] placeholder:text-[#555];
+}
+
+[data-theme="dark"] .field:hover {
+  @apply border-[#2a2a2e];
+}
+
+[data-theme="dark"] select.field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6B73' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .btn {
+  @apply border-[#1F1F24] bg-[#0A0A0C] text-[#B0B0B8];
+}
+[data-theme="dark"] .btn:hover:not(:disabled) {
+  @apply border-[var(--color-brand)] text-[var(--color-brand)];
+}
+
+[data-theme="dark"] .btn-primary {
+  @apply border-transparent bg-[var(--color-brand)] text-white;
+}
+
+[data-theme="dark"] .slim-scroll::-webkit-scrollbar-thumb {
+  background: #2a2a2e;
+}
+[data-theme="dark"] .slim-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3e;
 }
 
 body {
@@ -32,7 +103,7 @@ body {
 }
 .field {
   @apply h-9 w-full rounded-lg border border-line bg-paper px-3 text-[13px]
-    text-ink outline-none transition-all duration-150 placeholder:text-mute/70;
+    text-ink outline-none transition-all duration-150 placeholder:text-mute placeholder:opacity-70;
 }
 .field:hover {
   @apply border-[#dcdce0];
@@ -65,7 +136,7 @@ select.field {
   @apply border-transparent bg-brand text-white;
 }
 .btn-primary:hover:not(:disabled) {
-  @apply border-transparent bg-[#d1440f] text-white;
+  @apply border-transparent text-white brightness-90;
 }
 
 /* ── Shimmer skeleton ───────────────────────────────────────────────────── */
@@ -93,7 +164,7 @@ select.field {
 
 /* ── Focus visibility ───────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid #e8501a;
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
 

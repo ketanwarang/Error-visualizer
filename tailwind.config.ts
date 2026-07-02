@@ -1,22 +1,31 @@
 import type { Config } from "tailwindcss";
 
+function cv(variable: string): any {
+  return ({ opacityValue }: { opacityValue?: string }) => {
+    if (opacityValue !== undefined) {
+      return `color-mix(in srgb, var(${variable}) calc(${opacityValue} * 100%), transparent)`;
+    }
+    return `var(${variable})`;
+  };
+}
+
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        ink: "#101014",
-        soot: "#4B4B52",
-        mute: "#9B9BA3",
-        line: "#ECECEE",
-        paper: "#FFFFFF",
-        wash: "#F7F7F8",
-        stage: "#0E0E11",
-        brand: "#E8501A",
-        "brand-soft": "#FDEEE7",
-        "err-both": "#7C3AED",
-        "err-group": "#F59E0B",
-        "err-class": "#EF4444",
+        ink: cv("--color-ink"),
+        soot: cv("--color-soot"),
+        mute: cv("--color-mute"),
+        line: cv("--color-line"),
+        paper: cv("--color-paper"),
+        wash: cv("--color-wash"),
+        stage: cv("--color-stage"),
+        brand: cv("--color-brand"),
+        "brand-soft": cv("--color-brand-soft"),
+        "err-both": cv("--color-err-both"),
+        "err-group": cv("--color-err-group"),
+        "err-class": cv("--color-err-class"),
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],

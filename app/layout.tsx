@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { SettingsProvider } from "@/components/SettingsContext";
+import Logo from "@/components/Logo";
+import SettingsPanel from "@/components/SettingsPanel";
 
 export const metadata: Metadata = {
   title: "ShelfWatch · Error Annotation Portal",
   description:
     "Visually inspect ShelfWatch recognition errors overlaid on shelf images.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -14,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -28,39 +34,25 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans">
-
-        <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
-          <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
-            <Link href="/" className="group flex items-center gap-3">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-[13px] font-bold text-white transition-transform duration-200 group-hover:rotate-[-6deg]">
-                S
-              </span>
-              <span>
-                <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
-                  ParallelDots · ShelfWatch
+        <SettingsProvider>
+          <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
+            <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
+              <Link href="/" className="group flex items-center gap-3">
+                <Logo />
+                <span>
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
+                    ParallelDots · ShelfWatch
+                  </span>
+                  <span className="block text-[15px] font-bold leading-tight text-ink">
+                    Error Annotation Portal
+                  </span>
                 </span>
-                <span className="block text-[15px] font-bold leading-tight text-ink">
-                  Error Annotation Portal
-                </span>
-              </span>
-            </Link>
-            <div className="hidden items-center gap-4 text-[12px] text-mute sm:flex">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-[3px] bg-err-both" />
-                WG+WC
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-[3px] bg-err-group" />
-                WG only
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-[3px] bg-err-class" />
-                WC only
-              </span>
+              </Link>
+              <SettingsPanel />
             </div>
-          </div>
-        </header>
-        <main className="mx-auto max-w-[1440px] px-6 py-6">{children}</main>
+          </header>
+          <main className="mx-auto max-w-[1440px] px-6 py-6">{children}</main>
+        </SettingsProvider>
       </body>
     </html>
   );

@@ -1,5 +1,10 @@
 export type ErrorType = "both" | "group" | "class";
-export type TriageStatus = "confirmed" | "bad_gt" | "ambiguous";
+export type TriageStatus =
+  | "incorrectly_tagged"
+  | "ai_mistake"
+  | "visibility_issues"
+  | "sku_partially_visible"
+  | "ambiguous";
 
 export interface Dataset {
   id: string;
@@ -50,9 +55,11 @@ export const TRIAGE_META: Record<
   TriageStatus,
   { label: string; hex: string; key: string }
 > = {
-  confirmed: { label: "Model error", hex: "#059669", key: "1" },
-  bad_gt: { label: "Bad GT", hex: "#0284C7", key: "2" },
-  ambiguous: { label: "Ambiguous", hex: "#71717A", key: "3" },
+  incorrectly_tagged: { label: "Incorrectly Tagged", hex: "#DC2626", key: "1" },
+  ai_mistake:         { label: "AI mistake",         hex: "#2563EB", key: "2" },
+  visibility_issues:  { label: "Visibility issues",  hex: "#CA8A04", key: "3" },
+  sku_partially_visible: { label: "SKU partially visible", hex: "#7C3AED", key: "4" },
+  ambiguous:          { label: "Ambiguous",           hex: "#71717A", key: "5" },
 };
 
 export const errorType = (wg: number, wc: number): ErrorType =>
@@ -62,9 +69,9 @@ export const ERROR_META: Record<
   ErrorType,
   { hex: string; tag: string; label: string }
 > = {
-  both: { hex: "#7C3AED", tag: "WG+WC", label: "Wrong group + class" },
-  group: { hex: "#F59E0B", tag: "WG", label: "Wrong group only" },
-  class: { hex: "#EF4444", tag: "WC", label: "Wrong class only" },
+  both:  { hex: "#7C3AED", tag: "WG",  label: "Wrong group" },
+  group: { hex: "#F59E0B", tag: "WG",  label: "Wrong group" },
+  class: { hex: "#EF4444", tag: "WC",  label: "Wrong class only" },
 };
 
 /** Route remote shelf images through the server-side proxy (avoids CORS/auth issues). */

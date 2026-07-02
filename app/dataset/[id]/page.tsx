@@ -22,22 +22,25 @@ import {
 } from "@/lib/types";
 import { getSession, saveSession } from "@/lib/sessions";
 import { exportRows } from "@/lib/export";
+import { useSettings } from "@/components/SettingsContext";
 import CanvasViewer, { CanvasViewerHandle } from "@/components/CanvasViewer";
 import InfoPanel from "@/components/InfoPanel";
 import Filmstrip from "@/components/Filmstrip";
 
-const VIEW_H = 660;
 const PAGE_SIZE = 1000;
 
 export default function DatasetPage() {
   const { id } = useParams<{ id: string }>();
+  const { settings } = useSettings();
+  const viewH = Math.round((typeof window !== "undefined" ? window.innerHeight : 780) * 0.55 * settings.viewerScale);
+
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [anns, setAnns] = useState<AnnRow[] | null>(null);
   const [classImages, setClassImages] = useState<Record<string, string[]>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
-  const [errFilter, setErrFilter] = useState<"any" | "both" | "group" | "class">("any");
+  const [errFilter, setErrFilter] = useState<"any" | "both" | "class">("any");
   const [skuSearch, setSkuSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("All");
   const [shopFilter, setShopFilter] = useState("All");
@@ -46,7 +49,7 @@ export default function DatasetPage() {
   const [showTable, setShowTable] = useState(false);
 
   const [idx, setIdx] = useState(0);
-  const [selected, setSelected] = useState<AnnRow | null>(null); // sticky panel
+  const [selected, setSelected] = useState<AnnRow | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const viewerRef = useRef<CanvasViewerHandle>(null);
@@ -111,8 +114,14 @@ export default function DatasetPage() {
   const filtered = useMemo(() => {
     if (!anns) return [];
     let f = anns;
-    if (errFilter !== "any")
-      f = f.filter((a) => errorType(a.wrong_group, a.wrong_class) === errFilter);
+    if (errFilter !== "any") {
+      if (errFilter === "both") {
+        // "Wrong group" — includes both WG+WC and WG-only
+        f = f.filter((a) => a.wrong_group === 1);
+      } else {
+        f = f.filter((a) => errorType(a.wrong_group, a.wrong_class) === errFilter);
+      }
+    }
     const q = skuSearch.trim().toLowerCase();
     if (q)
       f = f.filter((a) =>
@@ -153,8 +162,11 @@ export default function DatasetPage() {
     [anns]
   );
   const counts = useMemo(() => {
-    const c = { both: 0, group: 0, class: 0 };
-    for (const a of anns ?? []) c[errorType(a.wrong_group, a.wrong_class)]++;
+    const c = { wg: 0, wc: 0 };
+    for (const a of anns ?? []) {
+      if (a.wrong_group) c.wg++;
+      if (a.wrong_class && !a.wrong_group) c.wc++;
+    }
     return c;
   }, [anns]);
   const triagedCount = useMemo(
@@ -162,7 +174,7 @@ export default function DatasetPage() {
     [filtered]
   );
 
-  /* ── Session resume (once, unless the user already navigated) ── */
+  /* ── Session resume ── */
   useEffect(() => {
     if (!anns || total === 0 || resumedRef.current) return;
     resumedRef.current = true;
@@ -181,14 +193,14 @@ export default function DatasetPage() {
     })();
   }, [anns, total, id]);
 
-  /* ── Session save (debounced on navigation) ── */
+  /* ── Session save ── */
   useEffect(() => {
     if (!anns || total === 0) return;
     const t = setTimeout(() => saveSession(id, safeIdx, total), 800);
     return () => clearTimeout(t);
   }, [safeIdx, total, anns, id]);
 
-  /* ── Preload neighbouring shelf images + current SKU reference images ── */
+  /* ── Preload ── */
   useEffect(() => {
     for (const off of [1, 2, 3, -1, -2]) {
       const g = imageGroups[safeIdx + off];
@@ -202,7 +214,7 @@ export default function DatasetPage() {
     }
   }, [safeIdx, imageGroups, rows, classImages]);
 
-  /* ── Sticky panel: pin on hover, clear only on image change ── */
+  /* ── Sticky panel ── */
   const onHover = useCallback(
     (i: number) => {
       if (i >= 0) setSelected(rows[i]);
@@ -211,7 +223,7 @@ export default function DatasetPage() {
   );
   useEffect(() => setSelected(null), [current?.[0]]);
 
-  /* ── Triage updates (optimistic local + Supabase) ── */
+  /* ── Triage / remarks updates ── */
   const updateTriage = useCallback(
     async (ann: AnnRow, patch: Partial<AnnRow>) => {
       setAnns((prev) =>
@@ -233,7 +245,7 @@ export default function DatasetPage() {
     []
   );
 
-  /* ── Keyboard: s prev · d reset · f next · 1/2/3 triage ── */
+  /* ── Keyboard: s prev · d reset · f next · 1-5 remarks ── */
   const goPrev = useCallback(() => {
     userNavigatedRef.current = true;
     setIdx((i) => Math.max(0, i - 1));
@@ -265,9 +277,16 @@ export default function DatasetPage() {
         e.preventDefault(); goNext(); setFlash("f");
       } else if (k === "d") {
         e.preventDefault(); viewerRef.current?.resetZoom(); setFlash("d");
-      } else if (["1", "2", "3"].includes(k) && selected) {
+      } else if (["1", "2", "3", "4", "5"].includes(k) && selected) {
         e.preventDefault();
-        const status = (["confirmed", "bad_gt", "ambiguous"] as TriageStatus[])[Number(k) - 1];
+        const statuses: TriageStatus[] = [
+          "incorrectly_tagged",
+          "ai_mistake",
+          "visibility_issues",
+          "sku_partially_visible",
+          "ambiguous",
+        ];
+        const status = statuses[Number(k) - 1];
         updateTriage(selected, {
           triage_status: selected.triage_status === status ? null : status,
         });
@@ -284,7 +303,6 @@ export default function DatasetPage() {
     return () => clearTimeout(t);
   }, [flash]);
 
-  /* Reset page when filters change */
   useEffect(() => {
     setIdx(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -304,7 +322,7 @@ export default function DatasetPage() {
       <div className="space-y-4">
         <div className="skeleton h-10 w-72 rounded-lg" />
         <div className="skeleton h-24 rounded-xl" />
-        <div className="skeleton rounded-xl" style={{ height: VIEW_H }} />
+        <div className="skeleton rounded-xl" style={{ height: viewH }} />
       </div>
     );
 
@@ -338,7 +356,7 @@ export default function DatasetPage() {
           <Cap k="d" flash={flash} /> 100%
           <Cap k="f" flash={flash} /> next
           <span className="mx-1 text-line">|</span>
-          <Cap k="1" flash={flash} /><Cap k="2" flash={flash} /><Cap k="3" flash={flash} /> triage
+          <Cap k="1" flash={flash} /><Cap k="2" flash={flash} /><Cap k="3" flash={flash} /><Cap k="4" flash={flash} /><Cap k="5" flash={flash} /> remarks
         </div>
       </div>
 
@@ -361,12 +379,11 @@ export default function DatasetPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <div>
             <label className="field-label">
-              Error type ({counts.both.toLocaleString()} / {counts.group.toLocaleString()} / {counts.class.toLocaleString()})
+              Error type ({counts.wg.toLocaleString()} / {counts.wc.toLocaleString()})
             </label>
             <select className="field" value={errFilter} onChange={(e) => setErrFilter(e.target.value as typeof errFilter)}>
               <option value="any">Any error</option>
-              <option value="both">Wrong group + class</option>
-              <option value="group">Wrong group only</option>
+              <option value="both">Wrong group</option>
               <option value="class">Wrong class only</option>
             </select>
           </div>
@@ -412,7 +429,7 @@ export default function DatasetPage() {
         <div className="rounded-xl border border-err-group/30 bg-err-group/5 p-6 text-center">
           <p className="text-[14px] font-semibold">No images match the current filters</p>
           <p className="mt-1 text-[13px] text-mute">
-            This dataset has {counts.both.toLocaleString()} WG+WC, {counts.group.toLocaleString()} WG-only and {counts.class.toLocaleString()} WC-only errors — adjust the filters above.
+            This dataset has {counts.wg.toLocaleString()} WG and {counts.wc.toLocaleString()} WC-only errors — adjust the filters above.
           </p>
         </div>
       ) : (
@@ -492,7 +509,7 @@ export default function DatasetPage() {
                     ref={viewerRef}
                     imageUrl={first.url}
                     anns={rows}
-                    height={VIEW_H}
+                    height={viewH}
                     onHover={onHover}
                   />
                 </motion.div>
@@ -502,7 +519,7 @@ export default function DatasetPage() {
               ann={selected}
               classImages={classImages}
               hasClassInfo={dataset.has_class_info}
-              height={VIEW_H}
+              height={viewH}
               onTriage={updateTriage}
             />
           </div>
@@ -558,7 +575,7 @@ export default function DatasetPage() {
                                 {r.wrong_class}
                               </td>
                               <td className="px-3 py-2">
-                                {r.triage_status ? (
+                                {r.triage_status && TRIAGE_META[r.triage_status] ? (
                                   <span
                                     className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
                                     style={{ background: TRIAGE_META[r.triage_status].hex }}

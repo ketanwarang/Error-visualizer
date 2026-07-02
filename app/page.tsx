@@ -22,6 +22,7 @@ export default function HomePage() {
   const [dragOver, setDragOver] = useState(false);
   const dfInput = useRef<HTMLInputElement>(null);
   const classInput = useRef<HTMLInputElement>(null);
+  const [dfFile, setDfFile] = useState<File | null>(null);
   const [classFile, setClassFile] = useState<File | null>(null);
 
   const loadDatasets = useCallback(async () => {
@@ -130,7 +131,7 @@ export default function HomePage() {
             e.preventDefault();
             setDragOver(false);
             const f = e.dataTransfer.files?.[0];
-            if (f && !busy) handleUpload(f);
+            if (f && !busy) setDfFile(f);
           }}
           className={`relative overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-200 ${
             dragOver
@@ -177,8 +178,7 @@ export default function HomePage() {
                   📦
                 </div>
                 <h1 className="text-[19px] font-bold">
-                  Drop your <span className="font-mono text-brand">df_out</span>{" "}
-                  CSV to begin
+                  Upload your data files to begin
                 </h1>
                 <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed text-mute">
                   Error rows are parsed in your browser and saved to Supabase —
@@ -186,22 +186,40 @@ export default function HomePage() {
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                   <button
-                    className="btn btn-primary"
+                    className={`btn ${
+                      dfFile ? "border-emerald-500 text-emerald-700" : ""
+                    }`}
                     onClick={() => dfInput.current?.click()}
                   >
-                    Choose df_out CSV
+                    {dfFile ? `✓ ${dfFile.name}` : "Raw data"}
                   </button>
                   <button
-                    className="btn"
+                    className={`btn ${
+                      classFile ? "border-emerald-500 text-emerald-700" : ""
+                    }`}
                     onClick={() => classInput.current?.click()}
                   >
                     {classFile
                       ? `✓ ${classFile.name}`
-                      : "Add class info CSV (optional)"}
+                      : "CGC file (optional)"}
                   </button>
                 </div>
+                {dfFile && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4"
+                  >
+                    <button
+                      className="btn btn-primary px-8"
+                      onClick={() => handleUpload(dfFile)}
+                    >
+                      Proceed
+                    </button>
+                  </motion.div>
+                )}
                 <p className="mt-3 text-[11px] text-mute">
-                  Class info CSV enables SKU reference images on hover
+                  CGC file enables SKU reference images on hover
                 </p>
               </motion.div>
             )}
@@ -213,7 +231,7 @@ export default function HomePage() {
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleUpload(f);
+              if (f) setDfFile(f);
               e.target.value = "";
             }}
           />
@@ -301,7 +319,7 @@ export default function HomePage() {
           </div>
         ) : datasets.length === 0 ? (
           <div className="rounded-xl border border-line bg-wash p-8 text-center text-[13px] text-mute">
-            No datasets yet — upload a df_out CSV above to create your first
+            No datasets yet — upload a CSV above to create your first
             one.
           </div>
         ) : (
