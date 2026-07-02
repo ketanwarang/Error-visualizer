@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { AnnRow, ERROR_META, errorType, proxied } from "@/lib/types";
+import { AnnRow, ERROR_META, TRIAGE_META, errorType, proxied } from "@/lib/types";
 
 export interface CanvasViewerHandle {
   /** Animate back to 100% (fit-to-viewport). Bound to the `d` key. */
@@ -95,6 +95,23 @@ const CanvasViewer = forwardRef<CanvasViewerHandle, Props>(
         ctx.fillRect(a.x_min, a.y_min - th, tw + fs * 0.8, th);
         ctx.fillStyle = "#fff";
         ctx.fillText(tag, a.x_min + fs * 0.4, a.y_min - fs * 0.35);
+        if (a.triage_status) {
+          const tm = TRIAGE_META[a.triage_status];
+          const r = 9 / scale;
+          const cx = a.x_max - r * 1.3;
+          const cy = a.y_min + r * 1.3;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fillStyle = tm.hex;
+          ctx.fill();
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 1.8 / scale;
+          ctx.beginPath();
+          ctx.moveTo(cx - r * 0.45, cy + r * 0.05);
+          ctx.lineTo(cx - r * 0.1, cy + r * 0.4);
+          ctx.lineTo(cx + r * 0.45, cy - r * 0.35);
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
       });
       ctx.restore();

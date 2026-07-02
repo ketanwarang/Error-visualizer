@@ -22,8 +22,32 @@ Supabase, so the whole team can open the same dataset by URL, no re-uploads.
 | `s` (or `←`) | Previous image |
 | `d` (or double-click) | Reset zoom to 100% (animated) |
 | `f` (or `→`) | Next image |
+| `1` | Triage pinned annotation: Model error |
+| `2` | Triage pinned annotation: Bad GT |
+| `3` | Triage pinned annotation: Ambiguous |
 
-Shortcuts are ignored while typing in any filter field.
+Shortcuts are ignored while typing in any filter field. Pressing the same
+triage key again clears the status.
+
+## Review workflow features
+
+- **Sticky detail panel** — hovering a box pins its details on the right;
+  they stay until you hover a different box (not until the cursor leaves).
+- **Triage + remarks** — mark each annotation Model error / Bad GT /
+  Ambiguous and add free-text remarks (auto-saved to Supabase). Triaged
+  boxes get a colored ✓ badge on the canvas; fully-triaged images get a
+  ✓ in the filmstrip and meta pills.
+- **Export** — download the currently filtered rows as CSV or Excel,
+  including `triage_status` and `remarks` columns.
+- **Session resume** — the portal remembers your position per dataset per
+  device (a random ID in localStorage — no login). Up to 3 sessions per
+  device appear as "Resume where you left off" cards on the home page,
+  and reopening a dataset jumps straight back with a toast.
+- **Filmstrip** — thumbnails of ±8 surrounding images below the stage;
+  click to jump. Doubles as a preloader since thumbs share the cached
+  proxied URL with the main stage.
+- **Preloading** — the next 3 / previous 2 shelf images and the pinned
+  annotation's SKU reference images are prefetched in the background.
 
 ## Setup
 
@@ -31,6 +55,8 @@ Shortcuts are ignored while typing in any filter field.
 
 1. Create a project at https://supabase.com (free tier is fine)
 2. Open **SQL Editor → New query**, paste `supabase/schema.sql`, run it
+   (fresh installs get everything; if you already ran the v1 schema, run
+   `supabase/migration_v2.sql` instead — both are safe to re-run)
 3. Grab **Project Settings → API → URL** and **anon public key**
 
 ### 2. Local run

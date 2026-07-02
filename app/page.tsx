@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase, supabaseReady } from "@/lib/supabase";
 import { parseDfOut, parseClassInfo, chunk } from "@/lib/parse";
-import { Dataset } from "@/lib/types";
+import { Dataset, ReviewSession } from "@/lib/types";
+import { listSessions } from "@/lib/sessions";
 
 type UploadPhase =
   | { step: "idle" }
@@ -16,6 +17,7 @@ type UploadPhase =
 export default function HomePage() {
   const router = useRouter();
   const [datasets, setDatasets] = useState<Dataset[] | null>(null);
+  const [sessions, setSessions] = useState<ReviewSession[]>([]);
   const [phase, setPhase] = useState<UploadPhase>({ step: "idle" });
   const [dragOver, setDragOver] = useState(false);
   const dfInput = useRef<HTMLInputElement>(null);
@@ -29,6 +31,7 @@ export default function HomePage() {
       .select("*")
       .order("created_at", { ascending: false });
     setDatasets((data as Dataset[]) ?? []);
+    setSessions(await listSessions());
   }, []);
 
   useEffect(() => {
@@ -233,6 +236,50 @@ export default function HomePage() {
         )}
       </motion.section>
 
+      {/* ── Resume sessions ── */}
+      {sessions.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.1em] text-mute">
+            Resume where you left off
+          </h2>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {sessions.map((s, i) => {
+              const pct = s.total_images
+                ? Math.round(((s.image_index + 1) / s.total_images) * 100)
+                : 0;
+              return (
+                <motion.button
+                  key={s.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05, duration: 0.3 }}
+                  onClick={() => router.push(`/dataset/${s.dataset_id}`)}
+                  className="group rounded-xl border border-line bg-paper p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card"
+                >
+                  <p className="truncate text-[13px] font-semibold text-ink group-hover:text-brand">
+                    {s.sw_datasets?.name ?? "Dataset"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-mute">
+                    Image {(s.image_index + 1).toLocaleString()} of{" "}
+                    {s.total_images.toLocaleString()} ·{" "}
+                    {timeAgo(s.updated_at)}
+                  </p>
+                  <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-line">
+                    <div
+                      className="h-full rounded-full bg-brand transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right font-mono text-[10px] text-mute">
+                    {pct}%
+                  </p>
+                </motion.button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* ── Dataset library ── */}
       <section className="mt-10">
         <div className="mb-3 flex items-baseline justify-between">
@@ -313,6 +360,14 @@ export default function HomePage() {
       </section>
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
 function Stat({

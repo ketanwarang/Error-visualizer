@@ -1,4 +1,5 @@
 export type ErrorType = "both" | "group" | "class";
+export type TriageStatus = "confirmed" | "bad_gt" | "ambiguous";
 
 export interface Dataset {
   id: string;
@@ -8,6 +9,17 @@ export interface Dataset {
   error_rows: number;
   image_count: number;
   has_class_info: boolean;
+}
+
+export interface ReviewSession {
+  id: number;
+  device_id: string;
+  device_label: string | null;
+  dataset_id: string;
+  image_index: number;
+  total_images: number;
+  updated_at: string;
+  sw_datasets?: { name: string } | null;
 }
 
 export interface AnnRow {
@@ -30,7 +42,18 @@ export interface AnnRow {
   x_max: number;
   y_max: number;
   annotated_image_link: string | null;
+  triage_status?: TriageStatus | null;
+  remarks?: string | null;
 }
+
+export const TRIAGE_META: Record<
+  TriageStatus,
+  { label: string; hex: string; key: string }
+> = {
+  confirmed: { label: "Model error", hex: "#059669", key: "1" },
+  bad_gt: { label: "Bad GT", hex: "#0284C7", key: "2" },
+  ambiguous: { label: "Ambiguous", hex: "#71717A", key: "3" },
+};
 
 export const errorType = (wg: number, wc: number): ErrorType =>
   wg && wc ? "both" : wg ? "group" : "class";

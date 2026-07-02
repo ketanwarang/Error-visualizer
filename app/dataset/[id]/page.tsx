@@ -11,9 +11,20 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
-import { AnnRow, Dataset, ERROR_META, errorType } from "@/lib/types";
+import {
+  AnnRow,
+  Dataset,
+  ERROR_META,
+  TRIAGE_META,
+  TriageStatus,
+  errorType,
+  proxied,
+} from "@/lib/types";
+import { getSession, saveSession } from "@/lib/sessions";
+import { exportRows } from "@/lib/export";
 import CanvasViewer, { CanvasViewerHandle } from "@/components/CanvasViewer";
 import InfoPanel from "@/components/InfoPanel";
+import Filmstrip from "@/components/Filmstrip";
 
 const VIEW_H = 660;
 const PAGE_SIZE = 1000;
@@ -35,9 +46,12 @@ export default function DatasetPage() {
   const [showTable, setShowTable] = useState(false);
 
   const [idx, setIdx] = useState(0);
-  const [hovered, setHovered] = useState(-1);
-  const [flash, setFlash] = useState<"s" | "d" | "f" | null>(null);
+  const [selected, setSelected] = useState<AnnRow | null>(null); // sticky panel
+  const [flash, setFlash] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const viewerRef = useRef<CanvasViewerHandle>(null);
+  const resumedRef = useRef(false);
+  const userNavigatedRef = useRef(false);
 
   /* ── Load dataset + annotations (paged) + class images ── */
   useEffect(() => {
@@ -127,7 +141,7 @@ export default function DatasetPage() {
   const total = imageGroups.length;
   const safeIdx = Math.min(idx, Math.max(0, total - 1));
   const current = imageGroups[safeIdx];
-  const rows = current?.[1] ?? [];
+  const rows = useMemo(() => current?.[1] ?? [], [current]);
   const first = rows[0];
 
   const dates = useMemo(
@@ -143,16 +157,95 @@ export default function DatasetPage() {
     for (const a of anns ?? []) c[errorType(a.wrong_group, a.wrong_class)]++;
     return c;
   }, [anns]);
+  const triagedCount = useMemo(
+    () => filtered.filter((a) => a.triage_status).length,
+    [filtered]
+  );
 
-  /* ── Keyboard shortcuts: s = prev · d = reset zoom · f = next ── */
-  const goPrev = useCallback(
-    () => setIdx((i) => Math.max(0, i - 1)),
+  /* ── Session resume (once, unless the user already navigated) ── */
+  useEffect(() => {
+    if (!anns || total === 0 || resumedRef.current) return;
+    resumedRef.current = true;
+    (async () => {
+      const s = await getSession(id);
+      if (
+        s &&
+        s.image_index > 0 &&
+        s.image_index < total &&
+        !userNavigatedRef.current
+      ) {
+        setIdx(s.image_index);
+        setToast(`Resumed at image ${s.image_index + 1} of ${total}`);
+        setTimeout(() => setToast(null), 3200);
+      }
+    })();
+  }, [anns, total, id]);
+
+  /* ── Session save (debounced on navigation) ── */
+  useEffect(() => {
+    if (!anns || total === 0) return;
+    const t = setTimeout(() => saveSession(id, safeIdx, total), 800);
+    return () => clearTimeout(t);
+  }, [safeIdx, total, anns, id]);
+
+  /* ── Preload neighbouring shelf images + current SKU reference images ── */
+  useEffect(() => {
+    for (const off of [1, 2, 3, -1, -2]) {
+      const g = imageGroups[safeIdx + off];
+      if (g) new Image().src = proxied(g[1][0].url);
+    }
+    for (const r of rows) {
+      for (const cls of [r.actual_class, r.predicted_class]) {
+        for (const u of (classImages[cls ?? ""] ?? []).slice(0, 6))
+          new Image().src = proxied(u);
+      }
+    }
+  }, [safeIdx, imageGroups, rows, classImages]);
+
+  /* ── Sticky panel: pin on hover, clear only on image change ── */
+  const onHover = useCallback(
+    (i: number) => {
+      if (i >= 0) setSelected(rows[i]);
+    },
+    [rows]
+  );
+  useEffect(() => setSelected(null), [current?.[0]]);
+
+  /* ── Triage updates (optimistic local + Supabase) ── */
+  const updateTriage = useCallback(
+    async (ann: AnnRow, patch: Partial<AnnRow>) => {
+      setAnns((prev) =>
+        prev
+          ? prev.map((a) => (a.id === ann.id ? { ...a, ...patch } : a))
+          : prev
+      );
+      setSelected((s) => (s && s.id === ann.id ? { ...s, ...patch } : s));
+      if (ann.id !== undefined) {
+        await supabase
+          .from("sw_annotations")
+          .update({
+            triage_status: patch.triage_status !== undefined ? patch.triage_status : ann.triage_status ?? null,
+            remarks: patch.remarks !== undefined ? patch.remarks : ann.remarks ?? null,
+          })
+          .eq("id", ann.id);
+      }
+    },
     []
   );
-  const goNext = useCallback(
-    () => setIdx((i) => Math.min(total - 1, i + 1)),
-    [total]
-  );
+
+  /* ── Keyboard: s prev · d reset · f next · 1/2/3 triage ── */
+  const goPrev = useCallback(() => {
+    userNavigatedRef.current = true;
+    setIdx((i) => Math.max(0, i - 1));
+  }, []);
+  const goNext = useCallback(() => {
+    userNavigatedRef.current = true;
+    setIdx((i) => Math.min(total - 1, i + 1));
+  }, [total]);
+  const jumpTo = useCallback((i: number) => {
+    userNavigatedRef.current = true;
+    setIdx(i);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -167,22 +260,23 @@ export default function DatasetPage() {
         return;
       const k = e.key.toLowerCase();
       if (k === "s" || k === "arrowleft") {
-        e.preventDefault();
-        goPrev();
-        setFlash("s");
+        e.preventDefault(); goPrev(); setFlash("s");
       } else if (k === "f" || k === "arrowright") {
-        e.preventDefault();
-        goNext();
-        setFlash("f");
+        e.preventDefault(); goNext(); setFlash("f");
       } else if (k === "d") {
+        e.preventDefault(); viewerRef.current?.resetZoom(); setFlash("d");
+      } else if (["1", "2", "3"].includes(k) && selected) {
         e.preventDefault();
-        viewerRef.current?.resetZoom();
-        setFlash("d");
+        const status = (["confirmed", "bad_gt", "ambiguous"] as TriageStatus[])[Number(k) - 1];
+        updateTriage(selected, {
+          triage_status: selected.triage_status === status ? null : status,
+        });
+        setFlash(k);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goPrev, goNext]);
+  }, [goPrev, goNext, selected, updateTriage]);
 
   useEffect(() => {
     if (!flash) return;
@@ -191,7 +285,10 @@ export default function DatasetPage() {
   }, [flash]);
 
   /* Reset page when filters change */
-  useEffect(() => setIdx(0), [errFilter, skuSearch, dateFilter, shopFilter, imgIdSearch, annIdSearch]);
+  useEffect(() => {
+    setIdx(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errFilter, skuSearch, dateFilter, shopFilter, imgIdSearch, annIdSearch]);
 
   /* ── Render states ── */
   if (loadError)
@@ -213,7 +310,21 @@ export default function DatasetPage() {
 
   return (
     <div>
-      {/* ── Breadcrumb + dataset name ── */}
+      {/* ── Resume toast ── */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[12px] font-medium text-white shadow-pop"
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Breadcrumb + shortcuts ── */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[13px]">
           <Link href="/" className="text-mute transition-colors hover:text-brand">
@@ -222,25 +333,30 @@ export default function DatasetPage() {
           <span className="text-line">/</span>
           <span className="font-semibold text-ink">{dataset.name}</span>
         </div>
-        <div className="flex items-center gap-2 text-[12px] text-mute">
-          <span className={`keycap transition-all ${flash === "s" ? "!border-brand !text-brand scale-110" : ""}`}>s</span>
-          prev
-          <span className={`keycap transition-all ${flash === "d" ? "!border-brand !text-brand scale-110" : ""}`}>d</span>
-          100%
-          <span className={`keycap transition-all ${flash === "f" ? "!border-brand !text-brand scale-110" : ""}`}>f</span>
-          next
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-mute">
+          <Cap k="s" flash={flash} /> prev
+          <Cap k="d" flash={flash} /> 100%
+          <Cap k="f" flash={flash} /> next
+          <span className="mx-1 text-line">|</span>
+          <Cap k="1" flash={flash} /><Cap k="2" flash={flash} /><Cap k="3" flash={flash} /> triage
         </div>
       </div>
 
       {/* ── Metrics ── */}
-      <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-5">
         <Metric label="Total annotations" value={dataset.total_rows} delay={0} />
         <Metric label="Total errors" value={dataset.error_rows} accent delay={0.05} />
         <Metric label="Filtered errors" value={filtered.length} accent delay={0.1} />
         <Metric label="Matched images" value={total} delay={0.15} />
+        <Metric
+          label="Triaged"
+          value={triagedCount}
+          suffix={filtered.length ? ` / ${filtered.length.toLocaleString()}` : ""}
+          delay={0.2}
+        />
       </div>
 
-      {/* ── Filters ── */}
+      {/* ── Filters + export ── */}
       <div className="mb-4 rounded-xl border border-line bg-wash p-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <div>
@@ -279,6 +395,17 @@ export default function DatasetPage() {
             <input className="field font-mono" placeholder="e.g. 4480908741" value={annIdSearch} onChange={(e) => setAnnIdSearch(e.target.value)} />
           </div>
         </div>
+        <div className="mt-3 flex items-center justify-end gap-2 border-t border-line pt-3">
+          <span className="mr-auto text-[11px] text-mute">
+            Export includes triage status + remarks for the {filtered.length.toLocaleString()} filtered rows
+          </span>
+          <button className="btn" onClick={() => exportRows(filtered, dataset.name, "csv")} disabled={!filtered.length}>
+            ↓ CSV
+          </button>
+          <button className="btn" onClick={() => exportRows(filtered, dataset.name, "xlsx")} disabled={!filtered.length}>
+            ↓ Excel
+          </button>
+        </div>
       </div>
 
       {total === 0 ? (
@@ -292,7 +419,7 @@ export default function DatasetPage() {
         <>
           {/* ── Navigation ── */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button className="btn" disabled={safeIdx === 0} onClick={() => setIdx(0)} title="First image">⏮</button>
+            <button className="btn" disabled={safeIdx === 0} onClick={() => jumpTo(0)} title="First image">⏮</button>
             <button className="btn" disabled={safeIdx === 0} onClick={goPrev}>← Prev</button>
             <button className="btn" disabled={safeIdx >= total - 1} onClick={goNext}>Next →</button>
             <div className="flex items-center gap-2">
@@ -303,13 +430,13 @@ export default function DatasetPage() {
                 value={safeIdx + 1}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  if (Number.isFinite(v)) setIdx(Math.min(Math.max(1, v), total) - 1);
+                  if (Number.isFinite(v)) jumpTo(Math.min(Math.max(1, v), total) - 1);
                 }}
                 className="field w-20 text-center font-mono font-semibold"
               />
               <span className="text-[12px] font-medium text-mute">of {total.toLocaleString()}</span>
             </div>
-            <button className="btn" disabled={safeIdx >= total - 1} onClick={() => setIdx(total - 1)} title="Last image">⏭</button>
+            <button className="btn" disabled={safeIdx >= total - 1} onClick={() => jumpTo(total - 1)} title="Last image">⏭</button>
 
             <div className="ml-auto h-1.5 w-40 overflow-hidden rounded-full bg-line">
               <motion.div
@@ -334,6 +461,9 @@ export default function DatasetPage() {
               <Pill>{first.visit_date ?? "—"}</Pill>
               <Pill mono>ID {current[0]}</Pill>
               <Pill accent>{rows.length} error annotation{rows.length !== 1 && "s"}</Pill>
+              {rows.every((r) => r.triage_status) && (
+                <Pill green>✓ fully triaged</Pill>
+              )}
               {first.annotated_image_link && (
                 <a
                   href={first.annotated_image_link}
@@ -363,18 +493,22 @@ export default function DatasetPage() {
                     imageUrl={first.url}
                     anns={rows}
                     height={VIEW_H}
-                    onHover={setHovered}
+                    onHover={onHover}
                   />
                 </motion.div>
               </AnimatePresence>
             </div>
             <InfoPanel
-              ann={hovered >= 0 ? rows[hovered] : null}
+              ann={selected}
               classImages={classImages}
               hasClassInfo={dataset.has_class_info}
               height={VIEW_H}
+              onTriage={updateTriage}
             />
           </div>
+
+          {/* ── Filmstrip ── */}
+          <Filmstrip groups={imageGroups} idx={safeIdx} onJump={jumpTo} />
 
           {/* ── Annotation table ── */}
           <div className="mt-4">
@@ -394,7 +528,7 @@ export default function DatasetPage() {
                     <table className="w-full text-[12px]">
                       <thead className="sticky top-0 bg-wash text-left">
                         <tr>
-                          {["Annotation ID","Actual group","Predicted group","Actual class","Predicted class","WG","WC"].map((h) => (
+                          {["Annotation ID","Actual group","Predicted group","Actual class","Predicted class","WG","WC","Status","Remarks"].map((h) => (
                             <th key={h} className="whitespace-nowrap border-b border-line px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-mute">
                               {h}
                             </th>
@@ -404,11 +538,12 @@ export default function DatasetPage() {
                       <tbody>
                         {rows.map((r, i) => {
                           const et = errorType(r.wrong_group, r.wrong_class);
+                          const isSel = selected?.id !== undefined && selected.id === r.id;
                           return (
                             <tr
                               key={r.annotation_id ?? i}
                               className={`border-b border-line/60 transition-colors last:border-0 ${
-                                i === hovered ? "bg-brand-soft" : "hover:bg-wash"
+                                isSel ? "bg-brand-soft" : "hover:bg-wash"
                               }`}
                             >
                               <td className="px-3 py-2 font-mono">{r.annotation_id ?? "—"}</td>
@@ -421,6 +556,21 @@ export default function DatasetPage() {
                               </td>
                               <td className="px-3 py-2 font-mono font-semibold" style={{ color: r.wrong_class ? ERROR_META[et].hex : undefined }}>
                                 {r.wrong_class}
+                              </td>
+                              <td className="px-3 py-2">
+                                {r.triage_status ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                                    style={{ background: TRIAGE_META[r.triage_status].hex }}
+                                  >
+                                    {TRIAGE_META[r.triage_status].label}
+                                  </span>
+                                ) : (
+                                  <span className="text-mute">—</span>
+                                )}
+                              </td>
+                              <td className="max-w-[220px] truncate px-3 py-2 text-soot" title={r.remarks ?? ""}>
+                                {r.remarks ?? "—"}
                               </td>
                             </tr>
                           );
@@ -438,14 +588,24 @@ export default function DatasetPage() {
   );
 }
 
+function Cap({ k, flash }: { k: string; flash: string | null }) {
+  return (
+    <span className={`keycap transition-all ${flash === k ? "!border-brand !text-brand scale-110" : ""}`}>
+      {k}
+    </span>
+  );
+}
+
 function Metric({
   label,
   value,
+  suffix = "",
   accent,
   delay,
 }: {
   label: string;
   value: number;
+  suffix?: string;
   accent?: boolean;
   delay: number;
 }) {
@@ -458,6 +618,7 @@ function Metric({
     >
       <p className={`font-mono text-[22px] font-semibold leading-none ${accent ? "text-brand" : "text-ink"}`}>
         {value.toLocaleString()}
+        {suffix && <span className="text-[13px] text-mute">{suffix}</span>}
       </p>
       <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-mute">
         {label}
@@ -469,16 +630,22 @@ function Metric({
 function Pill({
   children,
   accent,
+  green,
   mono,
 }: {
   children: React.ReactNode;
   accent?: boolean;
+  green?: boolean;
   mono?: boolean;
 }) {
   return (
     <span
       className={`rounded-full px-3 py-1 text-[12px] font-medium ${
-        accent ? "bg-brand-soft font-semibold text-brand" : "bg-wash text-soot"
+        accent
+          ? "bg-brand-soft font-semibold text-brand"
+          : green
+          ? "bg-emerald-50 font-semibold text-emerald-700"
+          : "bg-wash text-soot"
       } ${mono ? "font-mono" : ""}`}
     >
       {children}
