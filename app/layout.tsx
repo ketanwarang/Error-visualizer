@@ -45,13 +45,8 @@ export default function RootLayout({
                 <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-6">
                   <a href="/" className="group flex items-center gap-3">
                     <Logo size={32} />
-                    <span>
-                      <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
-                        Computer Vision Inspection
-                      </span>
-                      <span className="block text-[16px] font-bold leading-tight text-ink">
-                        AI Analysis Portal
-                      </span>
+                    <span className="text-[17px] font-extrabold tracking-wider uppercase text-ink group-hover:text-brand transition-colors">
+                      AI ANALYSIS PORTAL
                     </span>
                   </a>
                   <div className="flex items-center gap-2">
