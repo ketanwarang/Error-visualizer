@@ -14,6 +14,8 @@ export interface Dataset {
   error_rows: number;
   image_count: number;
   has_class_info: boolean;
+  owner_id?: string | null;
+  status?: "active" | "paused" | null;
 }
 
 export interface ReviewSession {
@@ -24,7 +26,8 @@ export interface ReviewSession {
   image_index: number;
   total_images: number;
   updated_at: string;
-  sw_datasets?: { name: string } | null;
+  status?: "active" | "paused" | null;
+  sw_datasets?: { name: string; owner_id?: string | null; status?: "active" | "paused" | null } | null;
 }
 
 export interface AnnRow {

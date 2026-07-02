@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase, supabaseReady } from "@/lib/supabase";
 import { parseDfOut, parseClassInfo, chunk } from "@/lib/parse";
 import { Dataset, ReviewSession } from "@/lib/types";
-import { listSessions } from "@/lib/sessions";
+import { listSessions, renameDataset as renameApi, toggleSessionStatus } from "@/lib/sessions";
+import { getDeviceId } from "@/lib/device";
 
 type UploadPhase =
   | { step: "idle" }
@@ -24,20 +25,42 @@ export default function HomePage() {
   const classInput = useRef<HTMLInputElement>(null);
   const [dfFile, setDfFile] = useState<File | null>(null);
   const [classFile, setClassFile] = useState<File | null>(null);
+  const [sessionName, setSessionName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   const loadDatasets = useCallback(async () => {
     if (!supabaseReady) return setDatasets([]);
+    const myId = getDeviceId();
+    const mySess = await listSessions();
+    setSessions(mySess);
+
     const { data } = await supabase
       .from("sw_datasets")
       .select("*")
       .order("created_at", { ascending: false });
-    setDatasets((data as Dataset[]) ?? []);
-    setSessions(await listSessions());
+
+    const localOwned = new Set(JSON.parse(localStorage.getItem("sw_my_dataset_ids") || "[]"));
+    const mySessIds = new Set(mySess.map((s) => s.dataset_id));
+
+    const allDs = (data as Dataset[]) ?? [];
+    // Only show datasets owned by this user OR where they have participated in a session OR created locally
+    const userDs = allDs.filter(
+      (d) => d.owner_id === myId || localOwned.has(d.id) || mySessIds.has(d.id)
+    );
+    setDatasets(userDs);
   }, []);
 
   useEffect(() => {
     loadDatasets();
   }, [loadDatasets]);
+
+  const handleFileSelect = (f: File) => {
+    setDfFile(f);
+    if (!sessionName.trim()) {
+      setSessionName(f.name.replace(/\.csv$/i, ""));
+    }
+  };
 
   const handleUpload = async (file: File) => {
     if (!supabaseReady) {
@@ -61,18 +84,26 @@ export default function HomePage() {
       }
       const classRows = classFile ? await parseClassInfo(classFile) : [];
 
+      const finalName = sessionName.trim() || file.name.replace(/\.csv$/i, "");
+      const myId = getDeviceId();
+
       const { data: ds, error: dsErr } = await supabase
         .from("sw_datasets")
         .insert({
-          name: file.name.replace(/\.csv$/i, ""),
+          name: finalName,
           total_rows: parsed.totalRows,
           error_rows: parsed.errors.length,
           image_count: parsed.imageCount,
           has_class_info: classRows.length > 0,
+          owner_id: myId,
         })
         .select()
         .single();
       if (dsErr || !ds) throw new Error(dsErr?.message ?? "Insert failed");
+
+      // Record ownership locally
+      const localOwned = JSON.parse(localStorage.getItem("sw_my_dataset_ids") || "[]");
+      localStorage.setItem("sw_my_dataset_ids", JSON.stringify(Array.from(new Set([...localOwned, ds.id]))));
 
       const annChunks = chunk(
         parsed.errors.map((e) => ({ ...e, dataset_id: ds.id })),
@@ -102,6 +133,27 @@ export default function HomePage() {
         step: "error",
         message: e instanceof Error ? e.message : "Upload failed",
       });
+    }
+  };
+
+  const handleRename = async (id: string) => {
+    if (!editingName.trim()) return setEditingId(null);
+    try {
+      await renameApi(id, editingName);
+      setEditingId(null);
+      loadDatasets();
+    } catch (e) {
+      alert("Rename failed");
+    }
+  };
+
+  const handleToggleStatus = async (datasetId: string, currentStatus?: string | null) => {
+    const next = currentStatus === "paused" ? "active" : "paused";
+    try {
+      await toggleSessionStatus(datasetId, next);
+      loadDatasets();
+    } catch (e: any) {
+      alert(e.message || "Could not toggle status");
     }
   };
 
@@ -208,8 +260,20 @@ export default function HomePage() {
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-4"
+                    className="mt-4 flex flex-col items-center gap-3"
                   >
+                    <div className="w-full max-w-xs">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-mute mb-1">
+                        Session Name
+                      </label>
+                      <input
+                        type="text"
+                        value={sessionName}
+                        onChange={(e) => setSessionName(e.target.value)}
+                        placeholder="e.g. Q3 Audit - East Region"
+                        className="field w-full text-center text-[13px] font-semibold"
+                      />
+                    </div>
                     <button
                       className="btn btn-primary px-8"
                       onClick={() => handleUpload(dfFile)}
@@ -219,7 +283,7 @@ export default function HomePage() {
                   </motion.div>
                 )}
                 <p className="mt-3 text-[11px] text-mute">
-                  CGC file enables SKU reference images on hover
+                  CGC file enables SKU reference images on hover · Max 3 active sessions
                 </p>
               </motion.div>
             )}
@@ -231,7 +295,7 @@ export default function HomePage() {
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) setDfFile(f);
+              if (f) handleFileSelect(f);
               e.target.value = "";
             }}
           />
@@ -254,55 +318,132 @@ export default function HomePage() {
         )}
       </motion.section>
 
-      {/* ── Resume sessions ── */}
+      {/* ── Resume sessions (Active max 3) ── */}
       {sessions.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.1em] text-mute">
-            Resume where you left off
-          </h2>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-mute">
+              Active & Paused Sessions (Max 3 Active)
+            </h2>
+            <span className="font-mono text-[11px] text-mute">
+              {sessions.filter((s) => s.status !== "paused").length} / 3 active
+            </span>
+          </div>
+          <div className="grid gap-2.5 sm:grid-cols-3">
             {sessions.map((s, i) => {
               const pct = s.total_images
                 ? Math.round(((s.image_index + 1) / s.total_images) * 100)
                 : 0;
+              const isPaused = s.status === "paused";
               return (
-                <motion.button
+                <motion.div
                   key={s.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05, duration: 0.3 }}
-                  onClick={() => router.push(`/dataset/${s.dataset_id}`)}
-                  className="group rounded-xl border border-line bg-paper p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card"
+                  className={`group relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-150 ${
+                    isPaused
+                      ? "border-line/60 bg-wash opacity-80 hover:opacity-100"
+                      : "border-line bg-paper hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card"
+                  }`}
                 >
-                  <p className="truncate text-[13px] font-semibold text-ink group-hover:text-brand">
-                    {s.sw_datasets?.name ?? "Dataset"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-mute">
-                    Image {(s.image_index + 1).toLocaleString()} of{" "}
-                    {s.total_images.toLocaleString()} ·{" "}
-                    {timeAgo(s.updated_at)}
-                  </p>
-                  <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-line">
-                    <div
-                      className="h-full rounded-full bg-brand transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => router.push(`/dataset/${s.dataset_id}`)}
+                        className="truncate text-[13px] font-semibold text-ink hover:text-brand text-left flex-1"
+                      >
+                        {s.sw_datasets?.name ?? "Dataset"}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(s.dataset_id);
+                          setEditingName(s.sw_datasets?.name || "");
+                        }}
+                        className="p-1 text-mute opacity-60 hover:opacity-100 transition-opacity"
+                        title="Rename session"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-mute">
+                      Image {(s.image_index + 1).toLocaleString()} of{" "}
+                      {s.total_images.toLocaleString()} · {timeAgo(s.updated_at)}
+                    </p>
                   </div>
-                  <p className="mt-1 text-right font-mono text-[10px] text-mute">
-                    {pct}%
-                  </p>
-                </motion.button>
+
+                  <div className="mt-3">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-line">
+                      <div
+                        className={`h-full rounded-full transition-all ${isPaused ? "bg-mute" : "bg-brand"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                      <span className="font-mono text-mute">{pct}% done</span>
+                      <button
+                        onClick={() => handleToggleStatus(s.dataset_id, s.status)}
+                        className={`rounded px-2 py-0.5 font-bold transition-colors ${
+                          isPaused
+                            ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                            : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
+                        }`}
+                      >
+                        {isPaused ? "▶ Resume" : "⏸ Pause"}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
               );
             })}
           </div>
         </section>
       )}
 
+      {/* ── Rename Modal ── */}
+      <AnimatePresence>
+        {editingId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-sm rounded-2xl border border-line bg-paper p-5 shadow-pop"
+            >
+              <h3 className="text-[14px] font-bold text-ink mb-3">Rename Session</h3>
+              <input
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                placeholder="Session name..."
+                className="field w-full text-[13px]"
+                autoFocus
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setEditingId(null)}
+                  className="btn px-4 py-1.5 text-[12px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRename(editingId)}
+                  className="btn btn-primary px-4 py-1.5 text-[12px]"
+                >
+                  Save
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* ── Dataset library ── */}
       <section className="mt-10">
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-mute">
-            Saved datasets
+            Your Saved Datasets
           </h2>
           {datasets && datasets.length > 0 && (
             <span className="font-mono text-[11px] text-mute">
@@ -333,10 +474,23 @@ export default function HomePage() {
                 className="group flex cursor-pointer items-center justify-between rounded-xl border border-line bg-paper px-5 py-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card"
                 onClick={() => router.push(`/dataset/${d.id}`)}
               >
-                <div className="min-w-0">
-                  <p className="truncate text-[14px] font-semibold text-ink group-hover:text-brand">
-                    {d.name}
-                  </p>
+                <div className="min-w-0 flex-1 mr-4">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-[14px] font-semibold text-ink group-hover:text-brand">
+                      {d.name}
+                    </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(d.id);
+                        setEditingName(d.name);
+                      }}
+                      className="text-mute opacity-0 group-hover:opacity-100 hover:text-ink transition-opacity text-[12px]"
+                      title="Rename dataset"
+                    >
+                      ✏️
+                    </button>
+                  </div>
                   <p className="mt-0.5 text-[12px] text-mute">
                     {new Date(d.created_at).toLocaleString()}
                     {d.has_class_info && (

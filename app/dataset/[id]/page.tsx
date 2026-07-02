@@ -20,7 +20,7 @@ import {
   errorType,
   proxied,
 } from "@/lib/types";
-import { getSession, saveSession } from "@/lib/sessions";
+import { getSession, saveSession, renameDataset } from "@/lib/sessions";
 import { useSettings } from "@/components/SettingsContext";
 import { useExport } from "@/components/ExportContext";
 import { useCollab } from "@/components/CollabContext";
@@ -57,6 +57,9 @@ export default function DatasetPage() {
   const [annIdSearch, setAnnIdSearch] = useState("");
   const [showTable, setShowTable] = useState(false);
   const [topCollapsed, setTopCollapsed] = useState(false);
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
 
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<AnnRow | null>(null);
@@ -404,7 +407,52 @@ export default function DatasetPage() {
             Datasets
           </a>
           <span className="text-line">/</span>
-          <span className="font-semibold text-ink">{dataset.name}</span>
+          {isEditingName ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={editNameValue}
+                onChange={(e) => setEditNameValue(e.target.value)}
+                className="field px-2 py-0.5 text-[13px] font-semibold"
+                autoFocus
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && editNameValue.trim()) {
+                    await renameDataset(id, editNameValue.trim());
+                    setDataset((prev) => prev ? { ...prev, name: editNameValue.trim() } : prev);
+                    setIsEditingName(false);
+                  } else if (e.key === "Escape") {
+                    setIsEditingName(false);
+                  }
+                }}
+              />
+              <button
+                onClick={async () => {
+                  if (editNameValue.trim()) {
+                    await renameDataset(id, editNameValue.trim());
+                    setDataset((prev) => prev ? { ...prev, name: editNameValue.trim() } : prev);
+                    setIsEditingName(false);
+                  }
+                }}
+                className="rounded bg-brand px-2 py-0.5 text-[11px] font-bold text-white"
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group">
+              <span className="font-semibold text-ink">{dataset.name}</span>
+              <button
+                onClick={() => {
+                  setEditNameValue(dataset.name);
+                  setIsEditingName(true);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-mute hover:text-ink transition-opacity text-[11px]"
+                title="Rename session"
+              >
+                ✏️
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <button
